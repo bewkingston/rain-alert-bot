@@ -241,29 +241,29 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "contents": [
                 {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
                  "color": "#FFFFFF", "weight": "bold", "size": "xl"},
-                {"type": "text", "text": now_str, "color": "#FFFFFF88", "size": "xs", "margin": "sm"},
+                {"type": "text", "text": now_str, "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "⏱ เวลา", "color": "#888", "size": "sm", "flex": 2},
-                    {"type": "text", "text": mins_text, "color": "#111", "size": "sm", "weight": "bold", "flex": 3},
+                    {"type": "text", "text": "⏱ เวลา", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": mins_text, "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
                 ]},
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888888", "size": "sm", "flex": 2},
                     {"type": "text", "text": f"{forecast.precipitation_mm} mm/hr",
-                     "color": "#111", "size": "sm", "weight": "bold", "flex": 3},
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
                 ]},
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "📡 แหล่งข้อมูล", "color": "#888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": "📡 แหล่งข้อมูล", "color": "#888888", "size": "sm", "flex": 2},
                     {"type": "text", "text": forecast.source.replace("_", " ").title(),
-                     "color": "#111", "size": "sm", "flex": 3},
+                     "color": "#111111", "size": "sm", "flex": 3},
                 ]},
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {rec}", "wrap": True,
-                 "color": "#333", "size": "sm", "margin": "md"},
+                 "color": "#333333", "size": "sm", "margin": "md"},
             ],
         },
         "footer": {
@@ -295,11 +295,11 @@ def _welcome_flex() -> FlexContainer:
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "text", "text": "วิธีเริ่มใช้งาน", "weight": "bold", "size": "md"},
-                {"type": "text", "wrap": True, "size": "sm", "color": "#444",
+                {"type": "text", "wrap": True, "size": "sm", "color": "#444444",
                  "text": "1️⃣  กด 'ส่งตำแหน่งของฉัน' ด้านล่าง\n2️⃣  ระบบจะแจ้งเตือนอัตโนมัติเมื่อฝนกำลังมา\n3️⃣  พิมพ์ 'ฝน' เพื่อตรวจสถานะตลอดเวลา"},
                 {"type": "separator"},
                 {"type": "text", "text": "ข้อมูลจาก Tomorrow.io + กรมอุตุนิยมวิทยา",
-                 "color": "#888", "size": "xs", "align": "center"},
+                 "color": "#888888", "size": "xs", "align": "center"},
             ],
         },
         "footer": {
