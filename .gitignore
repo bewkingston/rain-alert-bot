@@ -1,5 +1,6 @@
 .env
 __pycache__/
 *.pyc
+*.pyo
 rain_alert.db
 .DS_Store
