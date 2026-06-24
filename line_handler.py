@@ -17,7 +17,7 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import (
     MessageEvent, FollowEvent, UnfollowEvent,
-    LocationMessage, TextMessageContent,
+    LocationMessageContent, TextMessageContent,
 )
 
 from database import (
@@ -48,7 +48,7 @@ async def handle_events(body: str, signature: str):
         elif isinstance(event, UnfollowEvent):
             _on_unfollow(event)
         elif isinstance(event, MessageEvent):
-            if isinstance(event.message, LocationMessage):
+            if isinstance(event.message, LocationMessageContent):
                 await _on_location(event)
             elif isinstance(event.message, TextMessageContent):
                 await _on_text(event)
