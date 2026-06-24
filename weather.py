@@ -112,6 +112,69 @@ async def get_rain_forecast(lat: float, lon: float) -> RainForecast:
             or _no_rain("none"))
 
 
+async def get_rain_forecast_at_time(lat: float, lon: float,
+                                    target_hour: int, target_minute: int) -> RainForecast:
+    """ตรวจฝนสำหรับเวลาที่กำหนด (เวลาไทย UTC+7) ล่วงหน้าสูงสุด 6 ชม."""
+    from datetime import datetime, timezone, timedelta
+
+    thai_tz = timezone(timedelta(hours=7))
+    now_thai = datetime.now(thai_tz)
+
+    # ตั้งเวลาเป้าหมาย (ถ้าผ่านแล้ว → ใช้วันพรุ่งนี้)
+    target = now_thai.replace(hour=target_hour, minute=target_minute,
+                              second=0, microsecond=0)
+    if target <= now_thai:
+        target += timedelta(days=1)
+
+    hours_ahead = (target - now_thai).total_seconds() / 3600
+    if hours_ahead > 6:
+        return RainForecast(
+            False, None, "out_of_range", f"ไม่สามารถดูล่วงหน้า {int(hours_ahead)} ชม.",
+            0.0, "none",
+            f"Tomorrow.io ฟรีดูได้ถึง 6 ชม. ล่วงหน้าเท่านั้น", "❓"
+        )
+
+    if not TOMORROW_API_KEY:
+        return _no_rain("none")
+
+    target_utc = target.astimezone(timezone.utc)
+    start_iso = (target_utc - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_iso   = (target_utc + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    params = {
+        "location": f"{lat},{lon}",
+        "fields": ["precipitationIntensity"],
+        "units": "metric",
+        "timesteps": ["1h"],
+        "startTime": start_iso,
+        "endTime": end_iso,
+        "apikey": TOMORROW_API_KEY,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://api.tomorrow.io/v4/timelines", params=params)
+            resp.raise_for_status()
+            intervals = (resp.json().get("data", {})
+                         .get("timelines", [{}])[0]
+                         .get("intervals", []))
+
+        if not intervals:
+            return _no_rain("tomorrow_io")
+
+        max_mm = max(iv.get("values", {}).get("precipitationIntensity", 0)
+                     for iv in intervals)
+        if max_mm < 0.1:
+            return _no_rain("tomorrow_io")
+
+        level, level_th, emoji = _classify(max_mm)
+        return RainForecast(True, None, level, level_th,
+                            round(max_mm, 2), "tomorrow_io",
+                            f"Tomorrow.io — {max_mm:.1f} mm/hr", emoji)
+    except Exception as e:
+        logger.error(f"Tomorrow.io at_time error: {e}")
+        return _no_rain("none")
+
+
 def build_recommendation(forecast: RainForecast) -> str:
     if not forecast.will_rain:
         return "ท้องฟ้าแจ่มใส ไม่ต้องกังวล 😊"
