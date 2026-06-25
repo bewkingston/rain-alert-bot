@@ -33,6 +33,19 @@ class User(Base):
     updated_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                             onupdate=lambda: datetime.now(timezone.utc))
 
+    # ── Commute Alert ──────────────────────────────
+    commute_enabled       = Column(Boolean, default=False)
+    home_name             = Column(String(128), nullable=True)
+    home_lat              = Column(Float, nullable=True)
+    home_lon              = Column(Float, nullable=True)
+    work_name             = Column(String(128), nullable=True)
+    work_lat              = Column(Float, nullable=True)
+    work_lon              = Column(Float, nullable=True)
+    morning_departure     = Column(String(5), nullable=True)   # "08:00"
+    evening_departure     = Column(String(5), nullable=True)   # "18:00"
+    commute_morning_sent  = Column(DateTime, nullable=True)    # ป้องกันส่งซ้ำ
+    commute_evening_sent  = Column(DateTime, nullable=True)
+
 
 class UserLocation(Base):
     __tablename__ = "user_locations"

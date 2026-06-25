@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Rain Route 🌧️</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Helvetica Neue', sans-serif;
+      background: #F0F4F8;
+      min-height: 100vh;
+      color: #1A202C;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+      padding: 20px 20px 28px;
+      color: white;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .header p  { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+
+    /* ── Card ── */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin: -12px 16px 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .input-wrap {
+      display: flex;
+      align-items: center;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: #1565C0; }
+    .input-wrap .icon { font-size: 18px; margin-right: 8px; flex-shrink: 0; }
+    .input-wrap input {
+      border: none; outline: none; width: 100%;
+      font-size: 15px; color: #1A202C; background: transparent;
+    }
+    .input-wrap input::placeholder { color: #A0AEC0; }
+
+    /* ── Time Selector ── */
+    .time-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .time-btn {
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #4A5568;
+      background: white;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .time-btn.active {
+      border-color: #1565C0;
+      background: #EBF4FF;
+      color: #1565C0;
+      font-weight: 600;
+    }
+
+    .custom-time-wrap {
+      display: none;
+      margin-top: 8px;
+    }
+    .custom-time-wrap.show { display: block; }
+    .custom-time-wrap input[type="time"] {
+      width: 100%;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 16px;
+      outline: none;
+    }
+    .custom-time-wrap input[type="time"]:focus { border-color: #1565C0; }
+
+    /* ── CTA Button ── */
+    .btn-analyze {
+      width: 100%;
+      background: linear-gradient(135deg, #1565C0, #1976D2);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .3px;
+      transition: opacity .2s;
+      margin-top: 4px;
+    }
+    .btn-analyze:active { opacity: .85; }
+    .btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Loading ── */
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #E2E8F0;
+      border-top-color: #1565C0;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: #718096; font-size: 14px; }
+
+    /* ── Result ── */
+    #result { display: none; padding: 0 16px 24px; }
+
+    .result-header {
+      border-radius: 16px;
+      padding: 20px;
+      color: white;
+      margin-bottom: 12px;
+    }
+    .result-header.safe     { background: linear-gradient(135deg, #2E7D32, #388E3C); }
+    .result-header.light    { background: linear-gradient(135deg, #1565C0, #1976D2); }
+    .result-header.moderate { background: linear-gradient(135deg, #E65100, #F57C00); }
+    .result-header.heavy    { background: linear-gradient(135deg, #B71C1C, #C62828); }
+
+    .result-header .big-emoji { font-size: 36px; margin-bottom: 8px; }
+    .result-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .result-header .meta { font-size: 12px; opacity: .8; }
+
+    .risk-bar-wrap { margin: 12px 0; }
+    .risk-label { font-size: 12px; opacity: .85; margin-bottom: 6px; }
+    .risk-bar {
+      background: rgba(255,255,255,.25);
+      border-radius: 99px; height: 8px;
+    }
+    .risk-fill {
+      background: white;
+      border-radius: 99px; height: 8px;
+      transition: width .6s ease;
+    }
+
+    /* ── Waypoint Timeline ── */
+    .section-title {
+      font-size: 13px; font-weight: 600;
+      color: #718096; text-transform: uppercase;
+      letter-spacing: .5px; margin: 16px 0 10px;
+    }
+
+    .timeline { list-style: none; }
+    .timeline li {
+      display: flex; align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #F7FAFC;
+    }
+    .timeline li:last-child { border-bottom: none; }
+    .tl-time {
+      font-size: 13px; color: #718096;
+      width: 46px; flex-shrink: 0; padding-top: 1px;
+    }
+    .tl-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0; margin: 0 10px;
+    }
+    .tl-dot.none     { background: #F0FFF4; }
+    .tl-dot.light    { background: #EBF4FF; }
+    .tl-dot.moderate { background: #FFFAF0; }
+    .tl-dot.heavy    { background: #FFF5F5; }
+    .tl-dot.violent  { background: #FAF5FF; }
+
+    .tl-info { flex: 1; }
+    .tl-name { font-size: 14px; font-weight: 500; color: #1A202C; }
+    .tl-desc { font-size: 12px; color: #718096; margin-top: 2px; }
+
+    /* ── Recommendation Card ── */
+    .rec-card {
+      background: #EBF4FF;
+      border-left: 4px solid #1565C0;
+      border-radius: 0 10px 10px 0;
+      padding: 14px;
+      margin: 8px 0;
+    }
+    .rec-card.warning { background: #FFFAF0; border-color: #E65100; }
+    .rec-card.danger  { background: #FFF5F5; border-color: #C62828; }
+    .rec-card .rec-title { font-size: 13px; font-weight: 600; color: #1565C0; margin-bottom: 4px; }
+    .rec-card.warning .rec-title { color: #E65100; }
+    .rec-card.danger  .rec-title { color: #C62828; }
+    .rec-card .rec-text { font-size: 14px; color: #1A202C; line-height: 1.5; }
+
+    /* ── Alt Departure ── */
+    .alt-depart {
+      background: #F0FFF4;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 10px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .alt-depart .alt-icon { font-size: 20px; }
+    .alt-depart .alt-text { font-size: 13px; color: #276749; }
+    .alt-depart .alt-time { font-size: 16px; font-weight: 700; color: #276749; }
+
+    /* ── Send to LINE Button ── */
+    .btn-send {
+      width: 100%;
+      background: #06C755;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-send:active { opacity: .85; }
+
+    .btn-back {
+      width: 100%;
+      background: transparent;
+      color: #718096;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ── Error ── */
+    #error-box {
+      display: none;
+      background: #FFF5F5;
+      border: 1.5px solid #FC8181;
+      border-radius: 10px;
+      padding: 14px;
+      margin: 16px;
+      font-size: 14px;
+      color: #C53030;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Form View ─── -->
+<div id="view-form">
+  <div class="header">
+    <h1>🗺️ Rain Route</h1>
+    <p>เช็คฝนตลอดเส้นทางก่อนออกเดินทาง</p>
+  </div>
+
+  <div class="card">
+    <label>ต้นทาง</label>
+    <div class="input-wrap">
+      <span class="icon">📍</span>
+      <input id="origin" type="text" placeholder="เช่น True Digital Park, บางพลี" autocomplete="off" />
+    </div>
+
+    <label>ปลายทาง</label>
+    <div class="input-wrap">
+      <span class="icon">🏁</span>
+      <input id="destination" type="text" placeholder="เช่น อโศก, เมกะบางนา" autocomplete="off" />
+    </div>
+
+    <label>เวลาออกเดินทาง</label>
+    <div class="time-grid">
+      <button class="time-btn active" data-val="now" onclick="selectTime(this)">⚡ ตอนนี้</button>
+      <button class="time-btn" data-val="+30"  onclick="selectTime(this)">+30 นาที</button>
+      <button class="time-btn" data-val="+60"  onclick="selectTime(this)">+1 ชั่วโมง</button>
+      <button class="time-btn" data-val="custom" onclick="selectTime(this)">🕐 กำหนดเอง</button>
+    </div>
+    <div class="custom-time-wrap" id="custom-time-wrap">
+      <input type="time" id="custom-time" />
+    </div>
+
+    <button class="btn-analyze" onclick="analyze()">🔍 วิเคราะห์เส้นทาง</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>กำลังวิเคราะห์เส้นทาง...</p>
+  </div>
+
+  <div id="error-box"></div>
+</div>
+
+<!-- ─── Result View ─── -->
+<div id="result">
+  <div id="res-header" class="result-header safe" style="margin:0;border-radius:0;padding:24px 20px 32px;">
+    <div class="big-emoji" id="res-emoji">☀️</div>
+    <h2 id="res-headline">ฟ้าใส ออกได้เลย</h2>
+    <div class="meta" id="res-meta"></div>
+    <div class="risk-bar-wrap">
+      <div class="risk-label">โอกาสเจอฝนตลอดเส้นทาง <span id="res-risk">0</span>%</div>
+      <div class="risk-bar"><div class="risk-fill" id="risk-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px;">
+    <div class="rec-card" id="rec-card">
+      <div class="rec-title">💡 คำแนะนำ</div>
+      <div class="rec-text" id="rec-text"></div>
+    </div>
+
+    <div class="alt-depart" id="alt-depart" style="display:none">
+      <span class="alt-icon">⏰</span>
+      <div>
+        <div class="alt-text">แนะนำออกเดินทางเวลา</div>
+        <div class="alt-time" id="alt-time"></div>
+      </div>
+    </div>
+
+    <p class="section-title">สภาพอากาศตลอดเส้นทาง</p>
+    <ul class="timeline" id="timeline"></ul>
+
+    <button class="btn-send" onclick="sendToChat()">
+      <span>💬</span> ส่งผลลัพธ์ไปที่แชต LINE
+    </button>
+    <button class="btn-back" onclick="showForm()">← วิเคราะห์เส้นทางใหม่</button>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────
+let selectedTime = 'now';
+let lastResult   = null;
+
+// ─── LIFF Init ───────────────────────────────
+const LIFF_ID = document.currentScript?.dataset?.liffId
+  || new URLSearchParams(location.search).get('liff_id')
+  || '__LIFF_ID__';      // จะถูกแทนโดย server
+
+(async () => {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+  } catch (e) {
+    console.warn('LIFF init failed (preview mode?):', e.message);
+  }
+})();
+
+// ─── Time Selector ───────────────────────────
+function selectTime(btn) {
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedTime = btn.dataset.val;
+  const wrap = document.getElementById('custom-time-wrap');
+  if (selectedTime === 'custom') {
+    wrap.classList.add('show');
+    // ตั้ง default เป็นเวลาปัจจุบัน
+    const now = new Date();
+    document.getElementById('custom-time').value =
+      `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  } else {
+    wrap.classList.remove('show');
+  }
+}
+
+function getDepartureISO() {
+  const now = new Date();
+  if (selectedTime === 'now')    return now.toISOString();
+  if (selectedTime === '+30')    return new Date(now.getTime() + 30*60000).toISOString();
+  if (selectedTime === '+60')    return new Date(now.getTime() + 60*60000).toISOString();
+  if (selectedTime === 'custom') {
+    const [h, m] = document.getElementById('custom-time').value.split(':').map(Number);
+    const t = new Date(now);
+    t.setHours(h, m, 0, 0);
+    if (t < now) t.setDate(t.getDate() + 1);
+    return t.toISOString();
+  }
+  return now.toISOString();
+}
+
+// ─── Analyze ─────────────────────────────────
+async function analyze() {
+  const origin = document.getElementById('origin').value.trim();
+  const dest   = document.getElementById('destination').value.trim();
+  if (!origin || !dest) {
+    showError('กรุณาใส่ต้นทางและปลายทางก่อนนะครับ');
+    return;
+  }
+
+  hideError();
+  showLoading(true);
+
+  try {
+    // รับ LINE UID ถ้า login แล้ว
+    let uid = null;
+    try { uid = liff.isLoggedIn() ? liff.getDecodedIDToken()?.sub : null; } catch {}
+
+    const body = {
+      origin,
+      destination: dest,
+      departure_iso: getDepartureISO(),
+      uid,
+    };
+
+    const res = await fetch('/api/route-weather', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+
+    const data = await res.json();
+    lastResult = data;
+    showResult(data);
+
+  } catch (e) {
+    showError(e.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ─── Render Result ────────────────────────────
+function showResult(d) {
+  document.getElementById('view-form').style.display = 'none';
+  const rv = document.getElementById('result');
+  rv.style.display = 'block';
+
+  // Header color
+  const hdr = document.getElementById('res-header');
+  hdr.className = 'result-header ' + (
+    d.risk_pct === 0            ? 'safe'
+    : d.max_intensity === 'light'    ? 'light'
+    : d.max_intensity === 'moderate' ? 'moderate'
+    : 'heavy'
+  );
+
+  document.getElementById('res-emoji').textContent    = d.max_emoji;
+  document.getElementById('res-headline').textContent = headlineText(d);
+  document.getElementById('res-meta').textContent =
+    `${d.origin} → ${d.destination}  ·  ออก ${d.departure_str}  ·  ${d.duration_min} นาที`;
+
+  document.getElementById('res-risk').textContent = d.risk_pct;
+  document.getElementById('risk-fill').style.width = d.risk_pct + '%';
+
+  // Recommendation
+  const rc = document.getElementById('rec-card');
+  rc.className = 'rec-card ' + (d.risk_pct >= 75 ? 'danger' : d.risk_pct >= 40 ? 'warning' : '');
+  document.getElementById('rec-text').textContent = d.recommendation;
+
+  // Alt departure
+  const altEl = document.getElementById('alt-depart');
+  if (d.best_alt_departure) {
+    altEl.style.display = 'flex';
+    document.getElementById('alt-time').textContent = d.best_alt_departure;
+  } else {
+    altEl.style.display = 'none';
+  }
+
+  // Timeline
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  d.waypoints.forEach(wp => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="tl-time">${wp.eta_str}</div>
+      <div class="tl-dot ${wp.intensity}">${wp.emoji}</div>
+      <div class="tl-info">
+        <div class="tl-name">${wp.name}</div>
+        <div class="tl-desc">${wp.intensity_th}${wp.mm > 0 ? ' · ' + wp.mm + ' mm/hr' : ''}</div>
+      </div>`;
+    tl.appendChild(li);
+  });
+}
+
+function headlineText(d) {
+  if (d.risk_pct === 0)            return 'ฟ้าใส ออกได้เลย ☀️';
+  if (d.risk_pct < 30)             return 'มีฝนเล็กน้อยบางช่วง';
+  if (d.max_intensity === 'light') return 'ฝนเล็กน้อยบางจุด';
+  if (d.max_intensity === 'moderate') return 'ฝนปานกลาง ระวังด้วยนะ';
+  return 'ฝนหนัก ควรเลื่อนเวลา';
+}
+
+// ─── Send to LINE Chat ────────────────────────
+async function sendToChat() {
+  if (!lastResult) return;
+  const d = lastResult;
+
+  const rain_list = d.rain_waypoints.length > 0
+    ? d.rain_waypoints.map(w => `• ${w.name}  ${w.emoji}  ${w.eta_str}`).join('\n')
+    : '• ไม่พบฝนตลอดเส้นทาง ✅';
+
+  const msg = [
+    `🗺️ Rain Route — ${d.origin} → ${d.destination}`,
+    `⏰ ออก ${d.departure_str}  |  🚗 ${d.duration_min} นาที`,
+    `☔ ความเสี่ยงเจอฝน ${d.risk_pct}%`,
+    '',
+    '📍 จุดที่มีฝน:',
+    rain_list,
+    '',
+    `💡 ${d.recommendation}`,
+    d.best_alt_departure ? `⏰ แนะนำออก ${d.best_alt_departure} แทน` : '',
+  ].filter(l => l !== undefined).join('\n').trim();
+
+  try {
+    if (liff.isInClient()) {
+      await liff.sendMessages([{ type: 'text', text: msg }]);
+      liff.closeWindow();
+    } else {
+      // dev/browser mode — copy to clipboard
+      await navigator.clipboard.writeText(msg);
+      alert('คัดลอกผลลัพธ์แล้ว! (นอก LINE)');
+    }
+  } catch (e) {
+    alert('ไม่สามารถส่งข้อความได้: ' + e.message);
+  }
+}
+
+// ─── UI Helpers ──────────────────────────────
+function showForm() {
+  document.getElementById('view-form').style.display = 'block';
+  document.getElementById('result').style.display = 'none';
+  hideError();
+}
+
+function showLoading(on) {
+  document.getElementById('loading').style.display = on ? 'block' : 'none';
+  document.querySelector('.btn-analyze').disabled = on;
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = '❌ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+</script>
+</body>
+</html>

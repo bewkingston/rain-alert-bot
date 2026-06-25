@@ -26,11 +26,14 @@ from database import (
     AlertLog, UserLocation, User, get_minutes_since_last_alert,
 )
 from weather import get_rain_forecast, get_rain_forecast_at_time, build_recommendation
+from geocoding import geocode
 
 logger = logging.getLogger(__name__)
 
 LINE_CHANNEL_SECRET       = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+LIFF_ID                   = os.getenv("LIFF_ID", "")
+RENDER_URL                = os.getenv("RENDER_EXTERNAL_URL", "https://rain-alert-bot-a34m.onrender.com")
 
 parser        = WebhookParser(LINE_CHANNEL_SECRET)
 configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -111,6 +114,23 @@ async def _on_text(event: MessageEvent):
     if text_lower in ["ฝน", "ฝนตกไหม", "ฝนไหม", "rain", "🌧️", "🌧"]:
         await _reply_rain_status(event.reply_token, uid)
 
+    # ── ขอ template ตั้งค่าเดินทาง ─────────────────
+    elif text_lower in ["ตั้งค่า", "ตั้งค่าเดินทาง", "commute", "เดินทาง"]:
+        await _reply(event.reply_token, [FlexMessage(
+            alt_text="ตั้งค่าเส้นทางเดินทาง",
+            contents=_commute_setup_template_flex(),
+        )])
+
+    # ── ตั้งค่าเส้นทางเดินทาง (กรอกมาพร้อมกัน) ──────
+    elif _is_commute_setup(text):
+        await _handle_commute_setup(event.reply_token, uid, text)
+
+    # ── ออกช้า X นาที (จากปุ่มใน Flex) ─────────────
+    elif re.match(r'ออกช้า\s*(\d+)\s*นาที', text_lower):
+        m_delay = re.search(r'ออกช้า\s*(\d+)', text_lower)
+        delay_min = int(m_delay.group(1)) if m_delay else 30
+        await _reply_delayed_commute(event.reply_token, uid, delay_min)
+
     # ── ตรวจฝนตามเวลาเดินทาง (เช่น "ออกบ้าน 7.00 ฝนตกไหม") ──
     elif _has_commute_keywords(text_lower) and _parse_time(text) is not None:
         hour, minute = _parse_time(text)
@@ -128,14 +148,10 @@ async def _on_text(event: MessageEvent):
         )])
 
     else:
-        await _reply(event.reply_token, [TextMessage(text=(
-            "🌧️ Rain Alert — คำสั่งที่ใช้ได้\n\n"
-            "📍 ส่งตำแหน่ง → บันทึกและตรวจฝนทันที\n"
-            "ฝน / ฝนตกไหม → ตรวจสถานะฝนตอนนี้\n"
-            "ออกบ้าน 7.00 ฝนตกไหม → ตรวจฝนตามเวลา\n"
-            "เปิด → เปิดการแจ้งเตือนอัตโนมัติ\n"
-            "ปิด → ปิดการแจ้งเตือนอัตโนมัติ"
-        ))])
+        await _reply(event.reply_token, [FlexMessage(
+            alt_text="🌧️ Rain Alert — คำสั่งที่ใช้ได้",
+            contents=_help_flex(),
+        )])
 
 
 async def _reply_rain_status(reply_token: str, uid: str):
@@ -203,6 +219,127 @@ async def push_rain_alert(uid: str, lat: float, lon: float):
         logger.error(f"push_rain_alert error {uid}: {e}")
     finally:
         db.close()
+
+
+# ─────────────────────────────────────────────
+#  Commute Setup
+# ─────────────────────────────────────────────
+
+def _is_commute_setup(text: str) -> bool:
+    """ตรวจว่าเป็นข้อความตั้งค่าเส้นทาง เช่น 'บ้าน: บางพลี ที่ทำงาน: อโศก'"""
+    has_home = bool(re.search(r'บ้าน\s*[:：]', text))
+    has_work = bool(re.search(r'ทำงาน\s*[:：]|ออฟ\s*[:：]|งาน\s*[:：]', text))
+    return has_home and has_work
+
+
+async def _handle_commute_setup(reply_token: str, uid: str, text: str):
+    """Parse + geocode + บันทึก commute profile"""
+    home_m = re.search(r'บ้าน\s*[:：]\s*(.+)', text)
+    work_m = re.search(r'(?:ที่ทำงาน|ออฟ|งาน)\s*[:：]\s*(.+)', text)
+    morn_m = re.search(r'(?:เช้า|ออก(?:จากบ้าน)?)\s*[:：]\s*(\d{1,2}[.:h]\d{2})', text)
+    eve_m  = re.search(r'(?:เย็น|เลิก(?:งาน)?)\s*[:：]\s*(\d{1,2}[.:h]\d{2})', text)
+
+    if not home_m or not work_m:
+        await _reply(reply_token, [TextMessage(text=(
+            "📝 รูปแบบที่ถูกต้อง:\n\n"
+            "บ้าน: บางพลี\n"
+            "ที่ทำงาน: อโศก\n"
+            "เช้า: 08:00\n"
+            "เย็น: 18:00"
+        ))])
+        return
+
+    home_raw = home_m.group(1).strip().splitlines()[0].strip()
+    work_raw = work_m.group(1).strip().splitlines()[0].strip()
+    morning  = _normalise_time(morn_m.group(1)) if morn_m else "08:00"
+    evening  = _normalise_time(eve_m.group(1))  if eve_m  else "18:00"
+
+    await _reply(reply_token, [TextMessage(
+        text=f"🔍 กำลัง geocode:\n📍 บ้าน: {home_raw}\n🏢 ที่ทำงาน: {work_raw}\nรอสักครู่..."
+    )])
+
+    home_geo = await geocode(home_raw)
+    work_geo = await geocode(work_raw)
+
+    if not home_geo or not work_geo:
+        failed = home_raw if not home_geo else work_raw
+        await _push(uid, [TextMessage(text=f"❌ หาตำแหน่ง '{failed}' ไม่เจอ ลองพิมพ์ให้ละเอียดขึ้น เช่น 'บางพลี สมุทรปราการ'")])
+        return
+
+    home_lat, home_lon, home_name = home_geo
+    work_lat, work_lon, work_name = work_geo
+
+    db = SessionLocal()
+    try:
+        user = get_or_create_user(db, uid)
+        user.home_name         = home_raw
+        user.home_lat          = home_lat
+        user.home_lon          = home_lon
+        user.work_name         = work_raw
+        user.work_lat          = work_lat
+        user.work_lon          = work_lon
+        user.morning_departure = morning
+        user.evening_departure = evening
+        user.commute_enabled   = True
+        db.commit()
+    finally:
+        db.close()
+
+    await _push(uid, [FlexMessage(
+        alt_text="✅ ตั้งค่าเส้นทางเดินทางสำเร็จ",
+        contents=_commute_setup_confirm_flex(home_raw, work_raw, morning, evening),
+    )])
+
+
+def _normalise_time(t: str) -> str:
+    """'8.30' / '8:30' / '8h30' → '08:30'"""
+    m = re.match(r'(\d{1,2})[.:h](\d{2})', t)
+    if m:
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+    return t
+
+
+# ─────────────────────────────────────────────
+#  Commute Push (เรียกจาก scheduler)
+# ─────────────────────────────────────────────
+
+async def push_commute_alert(uid: str, trip: str):
+    """
+    trip = 'morning' (เช็คที่บ้าน ณ เวลาออกเดินทาง)
+           'evening' (เช็คที่ทำงาน ณ เวลาเลิกงาน)
+    """
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.line_user_id == uid).first()
+        if not user or not user.commute_enabled:
+            return
+        if trip == "morning":
+            lat, lon     = user.home_lat, user.home_lon
+            place        = user.home_name or "บ้าน"
+            dest         = user.work_name or "ที่ทำงาน"
+            depart_str   = user.morning_departure or "08:00"
+        else:
+            lat, lon     = user.work_lat, user.work_lon
+            place        = user.work_name or "ที่ทำงาน"
+            dest         = user.home_name or "บ้าน"
+            depart_str   = user.evening_departure or "18:00"
+
+        if not lat or not lon:
+            return
+    finally:
+        db.close()
+
+    h, m = map(int, depart_str.split(":"))
+    forecast = await get_rain_forecast_at_time(lat, lon, h, m)
+
+    thai_tz  = timezone(timedelta(hours=7))
+    now_thai = datetime.now(thai_tz)
+    alert_label = now_thai.strftime("%H:%M")
+
+    await _push(uid, [FlexMessage(
+        alt_text=f"{'🌧️' if forecast.will_rain else '☀️'} แจ้งเตือนเดินทาง{('เช้า' if trip=='morning' else 'เย็น')}นี้",
+        contents=_commute_alert_flex(forecast, trip, place, dest, depart_str, alert_label),
+    )])
 
 
 # ─────────────────────────────────────────────
@@ -292,6 +429,53 @@ async def _reply_commute_forecast(reply_token: str, uid: str,
     )])
 
 
+async def _reply_delayed_commute(reply_token: str, uid: str, delay_min: int):
+    """คำนวณเวลาออกใหม่ = เวลาออกที่ตั้งไว้ + delay_min"""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.line_user_id == uid).first()
+        if not user or not user.commute_enabled or not user.morning_departure:
+            # fallback: ออกช้าจากปัจจุบัน
+            thai_tz = timezone(timedelta(hours=7))
+            now = datetime.now(thai_tz)
+            new_time = now + timedelta(minutes=delay_min)
+            hour, minute = new_time.hour, new_time.minute
+            home_lat = user.home_lat if user else None
+            home_lon = user.home_lon if user else None
+        else:
+            h, m = map(int, user.morning_departure.split(":"))
+            new_m = h * 60 + m + delay_min
+            hour, minute = (new_m // 60) % 24, new_m % 60
+            home_lat, home_lon = user.home_lat, user.home_lon
+    finally:
+        db.close()
+
+    time_str = f"{hour:02d}:{minute:02d}"
+
+    if not home_lat or not home_lon:
+        await _reply(reply_token, [TextMessage(
+            text=f"📍 ยังไม่มีตำแหน่งบ้านครับ ลองตั้งค่าเดินทางก่อนนะครับ"
+        )])
+        return
+
+    forecast = await get_rain_forecast_at_time(home_lat, home_lon, hour, minute)
+
+    thai_tz = timezone(timedelta(hours=7))
+    now = datetime.now(thai_tz)
+    target = now.replace(hour=hour, minute=minute, second=0)
+    if target <= now:
+        target += timedelta(days=1)
+    mins_until = max(0, int((target - now).total_seconds() / 60))
+    h_u = mins_until // 60
+    m_u = mins_until % 60
+    time_label = f"อีก {h_u} ชม. {m_u} นาที" if h_u > 0 else f"อีก {m_u} นาที"
+
+    await _reply(reply_token, [FlexMessage(
+        alt_text=f"{'🌧️' if forecast.will_rain else '☀️'} ถ้าออก {time_str} น.",
+        contents=_commute_flex(forecast, time_str, time_label),
+    )])
+
+
 # ─────────────────────────────────────────────
 #  Helpers
 # ─────────────────────────────────────────────
@@ -300,6 +484,13 @@ async def _reply(reply_token: str, messages: list):
     async with AsyncApiClient(configuration) as api_client:
         await AsyncMessagingApi(api_client).reply_message(
             ReplyMessageRequest(reply_token=reply_token, messages=messages)
+        )
+
+
+async def _push(uid: str, messages: list):
+    async with AsyncApiClient(configuration) as api_client:
+        await AsyncMessagingApi(api_client).push_message(
+            PushMessageRequest(to=uid, messages=messages)
         )
 
 
@@ -436,6 +627,233 @@ def _commute_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
     })
 
 
+def _commute_setup_template_flex() -> FlexContainer:
+    """Flex ที่แสดง template ให้ user copy แล้วกรอก"""
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#1565C0", "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "🗺️ ตั้งค่าเส้นทางเดินทาง",
+                 "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": "แจ้งเตือนก่อนออกเดินทาง 1 ชั่วโมง",
+                 "color": "#BBDEFB", "size": "xs", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "คัดลอกข้อความด้านล่าง แล้วแก้เป็นข้อมูลของคุณ",
+                 "size": "sm", "color": "#555555", "wrap": True},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "wrap": True, "size": "sm",
+                 "color": "#1565C0", "weight": "bold", "margin": "md",
+                 "text": "บ้าน: บางพลี\nที่ทำงาน: อโศก\nเช้า: 08:00\nเย็น: 18:00"},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "size": "xs", "color": "#888888", "wrap": True,
+                 "text": "* ระบบจะแจ้งเตือนล่วงหน้า 1 ชั่วโมงก่อนออกเดินทางทุกวัน"},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical",
+            "contents": [
+                {"type": "button", "style": "primary", "color": "#1565C0",
+                 "action": {"type": "clipboard", "label": "📋 คัดลอก template",
+                            "clipboardText": "บ้าน: บางพลี\nที่ทำงาน: อโศก\nเช้า: 08:00\nเย็น: 18:00"}},
+            ],
+        },
+    })
+
+
+def _commute_setup_confirm_flex(home: str, work: str, morning: str, evening: str) -> FlexContainer:
+    """Flex ยืนยันหลังตั้งค่าสำเร็จ"""
+    alert_morn = f"{int(morning[:2])-1:02d}:{morning[3:]}"
+    alert_eve  = f"{int(evening[:2])-1:02d}:{evening[3:]}"
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#2E7D32", "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "✅ ตั้งค่าสำเร็จ!",
+                 "color": "#FFFFFF", "weight": "bold", "size": "xl"},
+                {"type": "text", "text": "จะแจ้งเตือนก่อนออกเดินทางทุกวัน",
+                 "color": "#C8E6C9", "size": "xs", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "🏠 บ้าน", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": home, "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
+                ]},
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "🏢 ที่ทำงาน", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": work, "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
+                ]},
+                {"type": "separator", "margin": "md"},
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "🌅 เช้า", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": f"ออก {morning} น. → แจ้งเตือน {alert_morn} น.",
+                     "color": "#111111", "size": "sm", "flex": 3, "wrap": True},
+                ]},
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "🌆 เย็น", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": f"เลิก {evening} น. → แจ้งเตือน {alert_eve} น.",
+                     "color": "#111111", "size": "sm", "flex": 3, "wrap": True},
+                ]},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "horizontal", "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "✏️ แก้ไข", "text": "ตั้งค่า"}},
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "🔕 ปิด", "text": "ปิด"}},
+            ],
+        },
+    })
+
+
+def _commute_alert_flex(forecast, trip: str, from_place: str, to_place: str,
+                         depart_str: str, alert_time: str) -> FlexContainer:
+    """Flex สำหรับ push alert ก่อนออกเดินทาง"""
+    trip_label = "เช้า" if trip == "morning" else "เย็น"
+    color = {"none": "#2E7D32", "light": "#1565C0",
+             "moderate": "#E65100", "heavy": "#B71C1C",
+             "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
+
+    if not forecast.will_rain:
+        icon      = "☀️"
+        headline  = f"ฟ้าใส ออก {depart_str} ได้เลย"
+        sub       = "ไม่ต้องพกร่ม"
+        advice    = "สภาพอากาศดีมาก ไม่มีฝนในช่วงเดินทาง 😊"
+    elif forecast.intensity == "light":
+        icon      = "🌦️"
+        headline  = f"ฝนเล็กน้อยช่วง {depart_str}"
+        sub       = "แนะนำพกร่ม"
+        advice    = "ฝนไม่หนัก แต่ควรพกร่มหรือเสื้อกันฝนไว้ 🌂"
+    elif forecast.intensity == "moderate":
+        icon      = "🌧️"
+        headline  = f"ฝนปานกลางช่วง {depart_str}"
+        sub       = "แนะนำออกให้เร็วขึ้นหรือรอฝนซา"
+        advice    = "ฝนปานกลาง ถ้าทำได้ลองออกก่อนหรือรอ 30-60 นาที 🧥"
+    else:
+        icon      = "⛈️"
+        headline  = f"ฝนหนักช่วง {depart_str}"
+        sub       = "แนะนำเลื่อนเวลาออกเดินทาง"
+        advice    = "ฝนหนักมาก ควรเลื่อนออกหรือหาที่หลบครับ ⛈️"
+
+    delay30_str = f"ออกช้า 30 นาที"
+    delay60_str = f"ออกช้า 60 นาที"
+
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": color, "paddingAll": "20px",
+            "contents": [
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": f"{icon} แจ้งเตือนเดินทาง{trip_label}นี้",
+                     "color": "#FFFFFF", "weight": "bold", "size": "lg", "flex": 1, "wrap": True},
+                    {"type": "text", "text": alert_time, "color": "#FFFFFFCC",
+                     "size": "sm", "align": "end"},
+                ]},
+                {"type": "text", "text": f"{from_place}  →  {to_place}",
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm", "wrap": True},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "text", "text": headline,
+                 "weight": "bold", "size": "md", "color": "#111111", "wrap": True},
+                {"type": "text", "text": sub,
+                 "size": "sm", "color": "#555555", "margin": "sm"},
+                {"type": "separator", "margin": "md"},
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": f"{forecast.precipitation_mm} mm/hr" if forecast.will_rain else "0 mm/hr",
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
+                ]},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "text": advice, "wrap": True,
+                 "color": "#333333", "size": "sm", "margin": "sm"},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": [
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "+30 นาที", "text": delay30_str}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "+60 นาที", "text": delay60_str}},
+                ]},
+                {"type": "button", "style": "primary", "height": "sm",
+                 "color": "#1565C0",
+                 "action": {"type": "message", "label": "🔄 เช็คฝนตอนนี้", "text": "ฝนตกไหม"}},
+            ],
+        },
+    })
+
+
+def _help_flex() -> FlexContainer:
+    """Flex หน้า Help"""
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#37474F", "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "🌧️ Rain Alert — คำสั่งทั้งหมด",
+                 "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": [
+                _help_row("📍", "ส่งตำแหน่ง", "บันทึกบ้านและตรวจฝนทันที"),
+                _help_row("🌧️", "ฝน", "ตรวจฝนตอนนี้"),
+                _help_row("⏰", "ออกบ้าน 7.00", "เช็คฝนตามเวลาที่กำหนด"),
+                {"type": "separator", "margin": "md"},
+                _help_row("🗺️", "ตั้งค่า", "ตั้งค่าเส้นทางประจำ (แจ้งเตือนทุกวัน)"),
+                _help_row("🔔", "เปิด / ปิด", "เปิด/ปิดการแจ้งเตือนอัตโนมัติ"),
+                {"type": "separator", "margin": "md"},
+                _help_row("🗺️", "Rain Route", "เช็คฝนตลอดเส้นทาง ก่อนออกเดินทาง"),
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "primary", "height": "sm",
+                 "color": "#1565C0",
+                 "action": {"type": "message", "label": "🌧️ ฝนตอนนี้", "text": "ฝน"}},
+                {"type": "button", "style": "primary", "height": "sm",
+                 "color": "#0D47A1",
+                 "action": {"type": "uri", "label": "🗺️ วางแผนเดินทาง",
+                            "uri": f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"}},
+            ],
+        },
+    })
+
+
+def _help_row(icon: str, command: str, desc: str) -> dict:
+    return {
+        "type": "box", "layout": "horizontal", "margin": "sm",
+        "contents": [
+            {"type": "text", "text": icon, "size": "sm", "flex": 0},
+            {"type": "text", "text": command, "size": "sm", "weight": "bold",
+             "color": "#1565C0", "flex": 3, "margin": "sm"},
+            {"type": "text", "text": desc, "size": "xs", "color": "#666666",
+             "flex": 5, "wrap": True},
+        ],
+    }
+
+
 def _welcome_flex() -> FlexContainer:
     return FlexContainer.from_dict({
         "type": "bubble", "size": "mega",
@@ -461,10 +879,15 @@ def _welcome_flex() -> FlexContainer:
             ],
         },
         "footer": {
-            "type": "box", "layout": "vertical",
+            "type": "box", "layout": "vertical", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#1565C0",
                  "action": {"type": "location", "label": "📍 ส่งตำแหน่งของฉัน"}},
+                {"type": "button", "style": "primary", "color": "#0D47A1",
+                 "action": {"type": "uri", "label": "🗺️ วางแผนเดินทาง (Rain Route)",
+                            "uri": f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"}},
+                {"type": "button", "style": "secondary",
+                 "action": {"type": "message", "label": "⚙️ ตั้งค่าเส้นทางประจำ", "text": "ตั้งค่า"}},
             ],
         },
     })
