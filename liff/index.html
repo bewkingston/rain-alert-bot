@@ -703,21 +703,71 @@ function headlineText(d) {
 async function sendToChat() {
   if (!lastResult) return;
   const d = lastResult;
-  const rain = d.rain_waypoints.length>0
-    ? d.rain_waypoints.map(w=>`• ${w.name}  ${w.emoji}  ${w.eta_str}`).join('\n')
+  const rain = d.rain_waypoints.length > 0
+    ? d.rain_waypoints.map(w => `• ${w.name}  ${w.emoji}  ${w.eta_str}`).join('\n')
     : '• ไม่พบฝนตลอดเส้นทาง ✅';
   const msg = [
     `🗺️ Rain Route — ${d.origin} → ${d.destination}`,
     `⏰ ออก ${d.departure_str}  |  🚗 ${d.duration_min} นาที`,
     `☔ ความเสี่ยงเจอฝน ${d.risk_pct}%`,
-    '','📍 จุดที่มีฝน:',rain,'',
+    '', '📍 จุดที่มีฝน:', rain, '',
     `💡 ${d.recommendation}`,
-    d.best_alt_departure?`⏰ แนะนำออก ${d.best_alt_departure} แทน`:'',
+    d.best_alt_departure ? `⏰ แนะนำออก ${d.best_alt_departure} แทน` : '',
   ].filter(Boolean).join('\n').trim();
+
+  const btn = document.querySelector('.btn-send');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> กำลังส่ง...';
+
   try {
-    if (liff.isInClient()) { await liff.sendMessages([{type:'text',text:msg}]); liff.closeWindow(); }
-    else { await navigator.clipboard.writeText(msg); alert('คัดลอกแล้ว!'); }
-  } catch (e) { alert('ส่งไม่ได้: '+e.message); }
+    // 1. ลอง liff.sendMessages (ต้องเปิดจากใน LINE chat)
+    if (typeof liff !== 'undefined' && liff.isInClient()) {
+      try {
+        await liff.sendMessages([{ type: 'text', text: msg }]);
+        btn.innerHTML = '<span>✅</span> ส่งแล้ว!';
+        setTimeout(() => liff.closeWindow(), 800);
+        return;
+      } catch (e) {
+        console.warn('sendMessages failed:', e.message);
+      }
+    }
+    // 2. ลอง clipboard API
+    try {
+      await navigator.clipboard.writeText(msg);
+      showMsgBox(msg, 'คัดลอกแล้ว! วางใน LINE ได้เลย 📋');
+      return;
+    } catch { /* ตกมา fallback */ }
+    // 3. แสดง textarea ให้ copy เอง
+    showMsgBox(msg, 'คัดลอกข้อความนี้ไปวางใน LINE');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>💬</span> ส่งผลลัพธ์ไปที่แชต LINE';
+  }
+}
+
+function showMsgBox(msg, title) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:flex-end;padding-bottom:env(safe-area-inset-bottom,0);';
+  ov.innerHTML = `
+    <div style="background:white;width:100%;border-radius:20px 20px 0 0;padding:20px 20px 24px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:#1A202C;">💬 ${title}</div>
+      <textarea id="_msg_ta" readonly style="width:100%;height:160px;font-size:13px;line-height:1.6;
+        padding:10px 12px;border:1.5px solid #E2E8F0;border-radius:10px;resize:none;
+        font-family:-apple-system,sans-serif;color:#1A202C;background:#F7FAFC;">${msg}</textarea>
+      <button id="_copy_btn" onclick="
+        var ta=document.getElementById('_msg_ta');
+        ta.select(); ta.setSelectionRange(0,99999);
+        try { navigator.clipboard.writeText(ta.value); } catch { document.execCommand('copy'); }
+        this.textContent='✅ คัดลอกแล้ว!';
+        setTimeout(()=>this.closest('div').parentElement.remove(),800);
+      " style="width:100%;margin-top:12px;padding:14px;background:#1565C0;color:white;
+        border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">
+        📋 คัดลอก
+      </button>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  setTimeout(() => document.getElementById('_msg_ta')?.select(), 150);
 }
 
 // ── Helpers ───────────────────────────────────────
