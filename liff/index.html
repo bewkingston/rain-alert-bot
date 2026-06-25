@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Rain Route 🌧️</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <!-- Google Maps Places API (injected by server) -->
-  <script>window._MAPS_KEY = '__MAPS_KEY__';</script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -45,8 +43,9 @@
       margin-bottom: 6px;
     }
 
-    /* ── Autocomplete Input ── */
+    /* ── Input ── */
     .input-wrap {
+      position: relative;
       display: flex;
       align-items: center;
       border: 1.5px solid #E2E8F0;
@@ -54,7 +53,6 @@
       padding: 10px 12px;
       margin-bottom: 14px;
       transition: border-color .2s;
-      position: relative;
     }
     .input-wrap:focus-within { border-color: #1565C0; }
     .input-wrap .icon { font-size: 18px; margin-right: 8px; flex-shrink: 0; }
@@ -64,33 +62,51 @@
     }
     .input-wrap input::placeholder { color: #A0AEC0; }
 
-    /* ── Google Places Dropdown Override ── */
-    .pac-container {
-      border-radius: 10px !important;
-      border: 1.5px solid #E2E8F0 !important;
-      box-shadow: 0 4px 20px rgba(0,0,0,.12) !important;
-      font-family: -apple-system, 'Helvetica Neue', sans-serif !important;
-      margin-top: 4px !important;
+    /* ── Custom Autocomplete Dropdown ── */
+    .ac-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0; right: 0;
+      background: white;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.12);
+      z-index: 999;
       overflow: hidden;
+      max-height: 220px;
+      overflow-y: auto;
     }
-    .pac-item {
-      padding: 10px 14px !important;
-      font-size: 14px !important;
-      cursor: pointer !important;
-      border-top: 1px solid #F7FAFC !important;
+    .ac-item {
+      padding: 11px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      color: #1A202C;
+      line-height: 1.4;
+      border-top: 1px solid #F7FAFC;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
     }
-    .pac-item:first-child { border-top: none !important; }
-    .pac-item:hover, .pac-item-selected {
-      background: #EBF4FF !important;
+    .ac-item:first-child { border-top: none; }
+    .ac-item:hover, .ac-item:active { background: #EBF4FF; }
+    .ac-item-icon { font-size: 14px; margin-top: 1px; flex-shrink: 0; color: #A0AEC0; }
+    .ac-item-text { flex: 1; }
+    .ac-item-main { font-weight: 500; }
+    .ac-item-sub  { font-size: 12px; color: #718096; margin-top: 1px; }
+
+    /* Loading dot in input */
+    .ac-loading { display: none; width: 16px; height: 16px; flex-shrink: 0; }
+    .ac-loading::after {
+      content: '';
+      display: block;
+      width: 14px; height: 14px;
+      border: 2px solid #E2E8F0;
+      border-top-color: #1565C0;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
     }
-    .pac-item-query {
-      font-size: 14px !important;
-      color: #1A202C !important;
-      font-weight: 500 !important;
-    }
-    .pac-matched { color: #1565C0 !important; }
-    .pac-icon { display: none !important; }
-    .pac-logo::after { display: none !important; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Time Selector ── */
     .time-grid {
@@ -118,10 +134,7 @@
       font-weight: 600;
     }
 
-    .custom-time-wrap {
-      display: none;
-      margin-top: 8px;
-    }
+    .custom-time-wrap { display: none; margin-top: 8px; }
     .custom-time-wrap.show { display: block; }
     .custom-time-wrap input[type="time"] {
       width: 100%;
@@ -165,7 +178,6 @@
       animation: spin .8s linear infinite;
       margin: 0 auto 16px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
     #loading p { color: #718096; font-size: 14px; }
 
     /* ── Result ── */
@@ -191,7 +203,7 @@
     .risk-bar { background: rgba(255,255,255,.25); border-radius: 99px; height: 8px; }
     .risk-fill { background: white; border-radius: 99px; height: 8px; transition: width .6s ease; }
 
-    /* ── Waypoint Timeline ── */
+    /* ── Timeline ── */
     .section-title {
       font-size: 13px; font-weight: 600;
       color: #718096; text-transform: uppercase;
@@ -220,7 +232,7 @@
     .tl-name { font-size: 14px; font-weight: 500; color: #1A202C; }
     .tl-desc { font-size: 12px; color: #718096; margin-top: 2px; }
 
-    /* ── Recommendation Card ── */
+    /* ── Rec Card ── */
     .rec-card {
       background: #EBF4FF;
       border-left: 4px solid #1565C0;
@@ -247,7 +259,7 @@
     .alt-depart .alt-text { font-size: 13px; color: #276749; }
     .alt-depart .alt-time { font-size: 16px; font-weight: 700; color: #276749; }
 
-    /* ── Send to LINE Button ── */
+    /* ── Send / Back Buttons ── */
     .btn-send {
       width: 100%;
       background: #06C755;
@@ -299,15 +311,19 @@
 
   <div class="card">
     <label>ต้นทาง</label>
-    <div class="input-wrap">
+    <div class="input-wrap" id="wrap-origin">
       <span class="icon">📍</span>
       <input id="origin" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
+      <div class="ac-loading" id="loading-origin"></div>
+      <div class="ac-dropdown" id="dropdown-origin"></div>
     </div>
 
     <label>ปลายทาง</label>
-    <div class="input-wrap">
+    <div class="input-wrap" id="wrap-destination">
       <span class="icon">🏁</span>
       <input id="destination" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
+      <div class="ac-loading" id="loading-destination"></div>
+      <div class="ac-dropdown" id="dropdown-destination"></div>
     </div>
 
     <label>เวลาออกเดินทาง</label>
@@ -372,8 +388,6 @@
 // ─── State ───────────────────────────────────────
 let selectedTime = 'now';
 let lastResult   = null;
-let autocompleteOrigin = null;
-let autocompleteDestination = null;
 
 // ─── LIFF Init ───────────────────────────────────
 const LIFF_ID = '__LIFF_ID__';
@@ -386,44 +400,106 @@ const LIFF_ID = '__LIFF_ID__';
   }
 })();
 
-// ─── Google Maps Places Autocomplete ─────────────
-function initAutocomplete() {
-  const options = {
-    componentRestrictions: { country: 'th' },   // จำกัดเฉพาะไทย
-    fields: ['name', 'formatted_address', 'geometry'],
-    types: ['establishment', 'geocode'],          // ทั้งสถานที่และที่อยู่
-    language: 'th',
-  };
+// ─── Custom Autocomplete ─────────────────────────
+function setupAutocomplete(inputId, dropdownId, loadingId) {
+  const input    = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const loadEl   = document.getElementById(loadingId);
+  let timer = null;
+  let active = -1;   // keyboard selection index
 
-  autocompleteOrigin = new google.maps.places.Autocomplete(
-    document.getElementById('origin'), options
-  );
-  autocompleteDestination = new google.maps.places.Autocomplete(
-    document.getElementById('destination'), options
-  );
-
-  // เมื่อ user เลือก suggestion → ใช้ชื่อสถานที่ (ไม่ต้องใช้ lat/lon เพราะ backend geocode เอง)
-  autocompleteOrigin.addListener('place_changed', () => {
-    const place = autocompleteOrigin.getPlace();
-    if (place.name) document.getElementById('origin').value = place.name;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    active = -1;
+    const q = input.value.trim();
+    if (q.length < 2) { hide(); return; }
+    loadEl.style.display = 'block';
+    timer = setTimeout(() => fetch_suggestions(q), 350);
   });
 
-  autocompleteDestination.addListener('place_changed', () => {
-    const place = autocompleteDestination.getPlace();
-    if (place.name) document.getElementById('destination').value = place.name;
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      active = Math.min(active + 1, items.length - 1);
+      highlight(items);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      active = Math.max(active - 1, -1);
+      highlight(items);
+      e.preventDefault();
+    } else if (e.key === 'Enter' && active >= 0) {
+      items[active].dispatchEvent(new Event('mousedown'));
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      hide();
+    }
   });
+
+  // Hide when clicking outside
+  document.addEventListener('mousedown', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) hide();
+  });
+
+  async function fetch_suggestions(q) {
+    try {
+      const res  = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      loadEl.style.display = 'none';
+      show(data);
+    } catch {
+      loadEl.style.display = 'none';
+      hide();
+    }
+  }
+
+  function show(items) {
+    if (!items || !items.length) { hide(); return; }
+    dropdown.innerHTML = '';
+    items.forEach((item, i) => {
+      const parts = item.description.split(',');
+      const main  = parts[0].trim();
+      const sub   = parts.slice(1).join(',').trim();
+
+      const div = document.createElement('div');
+      div.className = 'ac-item';
+      div.innerHTML = `
+        <span class="ac-item-icon">📍</span>
+        <div class="ac-item-text">
+          <div class="ac-item-main">${main}</div>
+          ${sub ? `<div class="ac-item-sub">${sub}</div>` : ''}
+        </div>`;
+
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = item.description;
+        hide();
+        input.blur();
+      });
+      dropdown.appendChild(div);
+    });
+    dropdown.style.display = 'block';
+    active = -1;
+  }
+
+  function highlight(items) {
+    items.forEach((el, i) => {
+      el.style.background = i === active ? '#EBF4FF' : '';
+    });
+    if (active >= 0) items[active].scrollIntoView({ block: 'nearest' });
+  }
+
+  function hide() {
+    dropdown.style.display = 'none';
+    dropdown.innerHTML = '';
+    loadEl.style.display = 'none';
+    active = -1;
+  }
 }
 
-// โหลด Google Maps JS พร้อม callback
-(function loadMapsScript() {
-  const key = window._MAPS_KEY;
-  if (!key) return;   // ถ้าไม่มี key ก็ใช้ input เปล่าได้เลย
-  const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&language=th&region=TH&callback=initAutocomplete`;
-  s.async = true;
-  s.defer = true;
-  document.head.appendChild(s);
-})();
+// Init autocomplete on both inputs
+setupAutocomplete('origin',      'dropdown-origin',      'loading-origin');
+setupAutocomplete('destination', 'dropdown-destination', 'loading-destination');
 
 // ─── Time Selector ───────────────────────────────
 function selectTime(btn) {

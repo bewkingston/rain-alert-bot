@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -126,6 +127,39 @@ async def route_weather(req: RouteRequest):
             for w in result.rain_waypoints
         ],
     }
+
+
+# ─────────────────────────────────────────────
+#  API: Places Autocomplete (proxy — avoids deprecated JS SDK)
+# ─────────────────────────────────────────────
+
+@app.get("/api/places-autocomplete")
+async def places_autocomplete(q: str = ""):
+    if not q or len(q) < 2:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                "https://maps.googleapis.com/maps/api/place/autocomplete/json",
+                params={
+                    "input"     : q,
+                    "key"       : GOOGLE_MAPS_KEY,
+                    "language"  : "th",
+                    "components": "country:th",
+                },
+            )
+        data = res.json()
+    except Exception as e:
+        logger.warning(f"Places autocomplete error: {e}")
+        return []
+
+    if data.get("status") not in ("OK", "ZERO_RESULTS"):
+        return []
+
+    return [
+        {"description": p["description"], "place_id": p["place_id"]}
+        for p in data.get("predictions", [])[:5]
+    ]
 
 
 # ─────────────────────────────────────────────
