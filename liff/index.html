@@ -5,15 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Rain Route 🌧️</title>
 
-  <!-- Google Maps bootstrap loader (lazy — loads on first importLibrary call) -->
-  <script>
-  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[t.toLowerCase()]),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.googleapis.com/maps/api/js?`+e;m.head.append(a);d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-    key: "__MAPS_KEY__",
-    v: "weekly",
-    language: "th",
-    region: "TH",
-  });
-  </script>
+  <!-- Leaflet.js — OpenStreetMap (ฟรี ไม่มีลายน้ำ) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
@@ -185,7 +179,9 @@
     .map-suggest-item:hover { background:#EBF4FF; }
 
     /* map */
-    #gmap { flex:1; width:100%; }
+    #gmap { flex:1; width:100%; z-index:0; }
+    /* ซ่อน Leaflet attribution ให้เล็กลง */
+    .leaflet-control-attribution { font-size:9px !important; opacity:.6; }
 
     /* footer */
     .map-footer {
@@ -487,34 +483,29 @@ async function openMapPicker(field) {
   document.getElementById('map-modal').style.display = 'flex';
 
   if (!mapInitialised) {
-    try { await initMap(); }
-    catch (e) { closeMapModal(); showError('โหลดแผนที่ไม่ได้: ' + e.message); }
+    try {
+      initMap();
+      // Leaflet ต้อง invalidateSize หลัง modal แสดง
+      setTimeout(() => mapInstance?.invalidateSize(), 100);
+    } catch (e) { closeMapModal(); showError('โหลดแผนที่ไม่ได้: ' + e.message); }
+  } else {
+    setTimeout(() => mapInstance?.invalidateSize(), 100);
   }
 }
 
-async function initMap() {
-  const [{ Map }, { Marker }] = await Promise.all([
-    google.maps.importLibrary('maps'),
-    google.maps.importLibrary('marker'),
-  ]);
+function initMap() {
+  // Center on Bangkok as default
+  const defaultCenter = [13.7563, 100.5018];
 
-  // Center on current GPS, fallback = Bangkok
-  let center = { lat: 13.7563, lng: 100.5018 };
-  try {
-    center = await new Promise((res, rej) =>
-      navigator.geolocation.getCurrentPosition(
-        ({ coords: c }) => res({ lat: c.latitude, lng: c.longitude }),
-        rej, { timeout: 5000 }
-      )
-    );
-  } catch { /* use Bangkok default */ }
+  mapInstance = L.map('gmap', { zoomControl: true }).setView(defaultCenter, 15);
 
-  mapInstance = new Map(document.getElementById('gmap'), {
-    center, zoom: 15,
-    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-  });
+  // OpenStreetMap tiles — ฟรี ไม่มีลายน้ำ
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(mapInstance);
 
-  // ── Nominatim search for map modal ──
+  // ── Nominatim search ──
   const mapSearchInput = document.createElement('input');
   mapSearchInput.type = 'text';
   mapSearchInput.placeholder = '🔍 ค้นหาสถานที่ในไทย...';
@@ -544,9 +535,8 @@ async function initMap() {
           div.textContent = '📍 ' + item.display_name;
           div.addEventListener('click', () => {
             const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
-            mapInstance.panTo({ lat, lng });
-            mapInstance.setZoom(16);
-            dropPin({ lat, lng });
+            mapInstance.setView([lat, lng], 16);
+            dropPin([lat, lng]);
             mapSelectedAddr = item.display_name;
             document.getElementById('map-addr-preview').textContent = '📍 ' + item.display_name;
             document.getElementById('map-ok-btn').disabled = false;
@@ -563,18 +553,18 @@ async function initMap() {
     if (!searchArea.contains(e.target)) mapSuggestBox.style.display = 'none';
   });
 
-  // ── Tap on map → drop pin + Nominatim reverse geocode ──
-  mapInstance.addListener('click', async (e) => {
-    const latLng = e.latLng;
-    dropPin(latLng);
+  // ── Tap map → Nominatim reverse geocode ──
+  mapInstance.on('click', async (e) => {
+    const { lat, lng } = e.latlng;
+    dropPin([lat, lng]);
     document.getElementById('map-addr-preview').textContent = '⏳ กำลังหาที่อยู่...';
     document.getElementById('map-ok-btn').disabled = true;
     try {
       const res  = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latLng.lat()}&lon=${latLng.lng()}&format=json&accept-language=th`
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=th`
       );
       const data = await res.json();
-      mapSelectedAddr = data.display_name || `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
+      mapSelectedAddr = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       document.getElementById('map-addr-preview').textContent = '📍 ' + mapSelectedAddr;
       document.getElementById('map-ok-btn').disabled = false;
     } catch {
@@ -582,18 +572,23 @@ async function initMap() {
     }
   });
 
-  window._GMMarker = Marker;
+  // ── Center to GPS on open ──
+  navigator.geolocation?.getCurrentPosition(
+    ({ coords: c }) => mapInstance.setView([c.latitude, c.longitude], 15),
+    () => {}, { timeout: 5000 }
+  );
+
   mapInitialised = true;
 }
 
-function dropPin(position) {
-  if (mapMarker) mapMarker.setMap(null);
-  mapMarker = new window._GMMarker({ position, map: mapInstance, animation: google.maps.Animation.DROP });
+function dropPin(latlng) {
+  if (mapMarker) mapMarker.remove();
+  mapMarker = L.marker(latlng).addTo(mapInstance);
 }
 
 function centerMapToMyLocation() {
   navigator.geolocation?.getCurrentPosition(
-    ({ coords: c }) => { mapInstance?.panTo({ lat: c.latitude, lng: c.longitude }); mapInstance?.setZoom(16); },
+    ({ coords: c }) => mapInstance?.setView([c.latitude, c.longitude], 16),
     () => alert('ไม่สามารถระบุตำแหน่งได้')
   );
 }

@@ -59,7 +59,7 @@ async def liff_page():
     """Serve LIFF app with LIFF_ID injected"""
     html = (LIFF_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__LIFF_ID__", LIFF_ID)
-    html = html.replace("__MAPS_KEY__", GOOGLE_MAPS_KEY)
+    
     return HTMLResponse(html)
 
 
