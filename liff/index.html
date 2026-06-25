@@ -108,6 +108,24 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── GPS Button ── */
+    .gps-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 0 0 6px;
+      font-size: 18px;
+      flex-shrink: 0;
+      opacity: 0.6;
+      transition: opacity .15s;
+      line-height: 1;
+    }
+    .gps-btn:active { opacity: 1; }
+    .gps-btn.locating {
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+
     /* ── Time Selector ── */
     .time-grid {
       display: grid;
@@ -315,6 +333,7 @@
       <span class="icon">📍</span>
       <input id="origin" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-origin"></div>
+      <button class="gps-btn" id="gps-origin" onclick="detectLocation('origin')" title="ใช้ตำแหน่งปัจจุบัน">🎯</button>
       <div class="ac-dropdown" id="dropdown-origin"></div>
     </div>
 
@@ -323,6 +342,7 @@
       <span class="icon">🏁</span>
       <input id="destination" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-destination"></div>
+      <button class="gps-btn" id="gps-destination" onclick="detectLocation('destination')" title="ใช้ตำแหน่งปัจจุบัน">🎯</button>
       <div class="ac-dropdown" id="dropdown-destination"></div>
     </div>
 
@@ -398,7 +418,52 @@ const LIFF_ID = '__LIFF_ID__';
   } catch (e) {
     console.warn('LIFF init failed:', e.message);
   }
+  // Auto-detect current location as default origin
+  detectLocation('origin', true);
 })();
+
+// ─── GPS / Location Detection ─────────────────────
+async function detectLocation(field, silent = false) {
+  if (!navigator.geolocation) {
+    if (!silent) showError('เบราว์เซอร์นี้ไม่รองรับ GPS');
+    return;
+  }
+
+  const btn   = document.getElementById(`gps-${field}`);
+  const input = document.getElementById(field);
+
+  btn.classList.add('locating');
+  input.placeholder = 'กำลังระบุตำแหน่ง...';
+  input.value = '';
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        const res  = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
+        const data = await res.json();
+        input.value = data.address || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      } catch {
+        input.value = '';
+        if (!silent) showError('ไม่สามารถแปลงพิกัดเป็นที่อยู่ได้');
+      } finally {
+        btn.classList.remove('locating');
+        input.placeholder = 'พิมพ์ชื่อสถานที่...';
+      }
+    },
+    (err) => {
+      btn.classList.remove('locating');
+      input.placeholder = 'พิมพ์ชื่อสถานที่...';
+      if (!silent) {
+        const msg = err.code === 1
+          ? 'กรุณาอนุญาตให้เข้าถึง GPS ในการตั้งค่าเบราว์เซอร์'
+          : 'ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่';
+        showError(msg);
+      }
+    },
+    { timeout: 10000, enableHighAccuracy: true }
+  );
+}
 
 // ─── Custom Autocomplete ─────────────────────────
 function setupAutocomplete(inputId, dropdownId, loadingId) {
