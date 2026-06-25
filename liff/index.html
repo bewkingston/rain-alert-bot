@@ -4,308 +4,275 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Rain Route 🌧️</title>
+
+  <!-- Google Maps bootstrap loader (lazy — loads on first importLibrary call) -->
+  <script>
+  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[t.toLowerCase()]),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.googleapis.com/maps/api/js?`+e;m.head.append(a);d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+    key: "__MAPS_KEY__",
+    v: "weekly",
+    language: "th",
+    region: "TH",
+  });
+  </script>
+
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: -apple-system, 'Helvetica Neue', sans-serif;
-      background: #F0F4F8;
-      min-height: 100vh;
-      color: #1A202C;
+      background: #F0F4F8; min-height: 100vh; color: #1A202C;
     }
 
     /* ── Header ── */
     .header {
       background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
-      padding: 20px 20px 28px;
-      color: white;
+      padding: 20px 20px 28px; color: white;
     }
-    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
-    .header p  { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p  { font-size: 13px; opacity: .8; margin-top: 4px; }
 
     /* ── Card ── */
     .card {
-      background: white;
-      border-radius: 16px;
-      padding: 20px;
-      margin: -12px 16px 16px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      background: white; border-radius: 16px; padding: 20px;
+      margin: -12px 16px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
     }
-
     label {
-      font-size: 12px;
-      font-weight: 600;
-      color: #718096;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      display: block;
-      margin-bottom: 6px;
+      font-size: 12px; font-weight: 600; color: #718096;
+      text-transform: uppercase; letter-spacing: .5px;
+      display: block; margin-bottom: 6px;
     }
 
-    /* ── Input Row ── */
+    /* ── Input ── */
     .input-wrap {
-      position: relative;
-      display: flex;
-      align-items: center;
-      border: 1.5px solid #E2E8F0;
-      border-radius: 10px;
-      padding: 10px 12px;
-      margin-bottom: 14px;
-      transition: border-color .2s;
+      position: relative; display: flex; align-items: center;
+      border: 1.5px solid #E2E8F0; border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 14px; transition: border-color .2s;
     }
     .input-wrap:focus-within { border-color: #1565C0; }
     .input-wrap .icon { font-size: 18px; margin-right: 8px; flex-shrink: 0; }
     .input-wrap input {
-      border: none; outline: none; flex: 1;
+      border: none; outline: none; flex: 1; min-width: 0;
       font-size: 15px; color: #1A202C; background: transparent;
-      min-width: 0;
     }
     .input-wrap input::placeholder { color: #A0AEC0; }
 
-    /* ── Spinner inside input ── */
-    .ac-loading {
-      display: none; width: 16px; height: 16px; flex-shrink: 0; margin-left: 4px;
-    }
+    /* spinner */
+    .ac-loading { display:none; width:16px; height:16px; flex-shrink:0; margin-left:4px; }
     .ac-loading::after {
-      content: ''; display: block;
-      width: 14px; height: 14px;
-      border: 2px solid #E2E8F0; border-top-color: #1565C0;
-      border-radius: 50%; animation: spin .7s linear infinite;
+      content:''; display:block; width:14px; height:14px;
+      border:2px solid #E2E8F0; border-top-color:#1565C0;
+      border-radius:50%; animation:spin .7s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ── Icon Buttons (GPS + Map) ── */
+    /* icon buttons */
     .icon-btn {
-      background: none; border: none; cursor: pointer;
-      padding: 0 0 0 6px; font-size: 17px; flex-shrink: 0;
-      opacity: 0.55; transition: opacity .15s; line-height: 1;
+      background:none; border:none; cursor:pointer; padding:0 0 0 6px;
+      font-size:17px; flex-shrink:0; opacity:.55; transition:opacity .15s; line-height:1;
     }
-    .icon-btn:active { opacity: 1; }
-    .icon-btn.locating { animation: pulse 1s infinite; }
+    .icon-btn:active { opacity:1; }
+    .icon-btn.locating { animation:pulse 1s infinite; }
     @keyframes pulse { 0%,100%{opacity:.25} 50%{opacity:.9} }
 
-    /* ── Autocomplete Dropdown ── */
+    /* dropdown */
     .ac-dropdown {
-      display: none;
-      position: absolute;
-      top: calc(100% + 2px); left: 0; right: 0;
-      background: white;
-      border: 1.5px solid #E2E8F0; border-radius: 10px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.12);
-      z-index: 998; overflow: hidden;
-      max-height: 220px; overflow-y: auto;
+      display:none; position:absolute; top:calc(100% + 2px); left:0; right:0;
+      background:white; border:1.5px solid #E2E8F0; border-radius:10px;
+      box-shadow:0 4px 20px rgba(0,0,0,.12); z-index:998;
+      overflow:hidden; max-height:220px; overflow-y:auto;
     }
     .ac-item {
-      padding: 11px 14px; font-size: 14px; cursor: pointer;
-      color: #1A202C; line-height: 1.4;
-      border-top: 1px solid #F7FAFC;
-      display: flex; align-items: flex-start; gap: 8px;
+      padding:11px 14px; font-size:14px; cursor:pointer; color:#1A202C;
+      line-height:1.4; border-top:1px solid #F7FAFC;
+      display:flex; align-items:flex-start; gap:8px;
     }
-    .ac-item:first-child { border-top: none; }
-    .ac-item:hover { background: #EBF4FF; }
-    .ac-item-icon { font-size: 14px; margin-top: 1px; flex-shrink: 0; color: #A0AEC0; }
-    .ac-item-main { font-weight: 500; font-size: 14px; }
-    .ac-item-sub  { font-size: 12px; color: #718096; margin-top: 1px; }
+    .ac-item:first-child { border-top:none; }
+    .ac-item:hover { background:#EBF4FF; }
+    .ac-item-icon { font-size:14px; margin-top:1px; flex-shrink:0; color:#A0AEC0; }
+    .ac-item-main { font-weight:500; }
+    .ac-item-sub  { font-size:12px; color:#718096; margin-top:1px; }
 
-    /* ── Time Selector ── */
-    .time-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;
-    }
+    /* time grid */
+    .time-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px; }
     .time-btn {
-      border: 1.5px solid #E2E8F0; border-radius: 10px; padding: 10px;
-      text-align: center; font-size: 14px; font-weight: 500;
-      color: #4A5568; background: white; cursor: pointer; transition: all .15s;
+      border:1.5px solid #E2E8F0; border-radius:10px; padding:10px;
+      text-align:center; font-size:14px; font-weight:500;
+      color:#4A5568; background:white; cursor:pointer; transition:all .15s;
     }
     .time-btn.active {
-      border-color: #1565C0; background: #EBF4FF; color: #1565C0; font-weight: 600;
+      border-color:#1565C0; background:#EBF4FF; color:#1565C0; font-weight:600;
     }
-    .custom-time-wrap { display: none; margin-top: 8px; }
-    .custom-time-wrap.show { display: block; }
+    .custom-time-wrap { display:none; margin-top:8px; }
+    .custom-time-wrap.show { display:block; }
     .custom-time-wrap input[type="time"] {
-      width: 100%; border: 1.5px solid #E2E8F0; border-radius: 10px;
-      padding: 10px 12px; font-size: 16px; outline: none;
+      width:100%; border:1.5px solid #E2E8F0; border-radius:10px;
+      padding:10px 12px; font-size:16px; outline:none;
     }
-    .custom-time-wrap input[type="time"]:focus { border-color: #1565C0; }
+    .custom-time-wrap input[type="time"]:focus { border-color:#1565C0; }
 
-    /* ── CTA Button ── */
+    /* CTA */
     .btn-analyze {
-      width: 100%;
-      background: linear-gradient(135deg, #1565C0, #1976D2);
-      color: white; border: none; border-radius: 12px;
-      padding: 16px; font-size: 16px; font-weight: 600;
-      cursor: pointer; letter-spacing: .3px; transition: opacity .2s; margin-top: 4px;
+      width:100%; background:linear-gradient(135deg,#1565C0,#1976D2);
+      color:white; border:none; border-radius:12px; padding:16px;
+      font-size:16px; font-weight:600; cursor:pointer;
+      transition:opacity .2s; margin-top:4px;
     }
-    .btn-analyze:active { opacity: .85; }
-    .btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-analyze:active { opacity:.85; }
+    .btn-analyze:disabled { opacity:.5; cursor:not-allowed; }
 
-    /* ── Loading ── */
-    #loading { display: none; text-align: center; padding: 40px 20px; }
+    /* loading */
+    #loading { display:none; text-align:center; padding:40px 20px; }
     .spinner {
-      width: 40px; height: 40px;
-      border: 4px solid #E2E8F0; border-top-color: #1565C0;
-      border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px;
+      width:40px; height:40px; border:4px solid #E2E8F0; border-top-color:#1565C0;
+      border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px;
     }
-    #loading p { color: #718096; font-size: 14px; }
+    #loading p { color:#718096; font-size:14px; }
 
-    /* ── Error ── */
+    /* error */
     #error-box {
-      display: none; background: #FFF5F5; border: 1.5px solid #FC8181;
-      border-radius: 10px; padding: 14px; margin: 16px; font-size: 14px; color: #C53030;
+      display:none; background:#FFF5F5; border:1.5px solid #FC8181;
+      border-radius:10px; padding:14px; margin:16px; font-size:14px; color:#C53030;
     }
 
-    /* ════════════════════════════════════════
-       MAP MODAL
-    ════════════════════════════════════════ */
+    /* ════════════ MAP MODAL ════════════ */
     #map-modal {
-      display: none;
-      position: fixed; inset: 0; z-index: 9999;
-      background: white;
-      flex-direction: column;
+      display:none; position:fixed; inset:0; z-index:9999;
+      background:white; flex-direction:column;
     }
 
+    /* topbar */
     .map-topbar {
-      display: flex; align-items: center;
-      padding: 12px 16px;
-      background: #1565C0;
-      color: white;
-      gap: 12px;
-      flex-shrink: 0;
-    }
-    .map-topbar-title {
-      flex: 1; font-size: 15px; font-weight: 600; text-align: center;
+      display:flex; align-items:center; padding:12px 16px;
+      background:#1565C0; color:white; gap:10px; flex-shrink:0;
     }
     .map-close-btn {
-      background: rgba(255,255,255,.2); border: none; color: white;
-      border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer;
+      background:rgba(255,255,255,.2); border:none; color:white;
+      border-radius:8px; padding:7px 12px; font-size:14px; cursor:pointer; white-space:nowrap;
     }
+    .map-topbar-title { flex:1; font-size:15px; font-weight:600; text-align:center; }
     .map-ok-btn {
-      background: white; border: none; color: #1565C0;
-      border-radius: 8px; padding: 6px 14px; font-size: 14px;
-      font-weight: 700; cursor: pointer; transition: opacity .15s;
+      background:white; border:none; color:#1565C0; border-radius:8px;
+      padding:7px 14px; font-size:14px; font-weight:700; cursor:pointer;
+      transition:opacity .15s; white-space:nowrap;
     }
-    .map-ok-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .map-ok-btn:disabled { opacity:.35; cursor:not-allowed; }
 
-    /* Search bar inside modal */
-    .map-search-bar {
-      padding: 10px 16px;
-      background: #F0F4F8;
-      flex-shrink: 0;
-      position: relative;
+    /* search area — PlaceAutocompleteElement lives here */
+    .map-search-area {
+      padding:10px 16px; background:#F7FAFC;
+      border-bottom:1px solid #E2E8F0; flex-shrink:0;
+      /* must NOT clip the places dropdown */
+      overflow:visible; position:relative; z-index:100;
     }
-    .map-search-bar input {
-      width: 100%; border: 1.5px solid #E2E8F0; border-radius: 10px;
-      padding: 10px 14px; font-size: 15px; outline: none; background: white;
-    }
-    .map-search-bar input:focus { border-color: #1565C0; }
-    #map-search-dropdown {
-      display: none;
-      position: absolute; top: calc(100% - 4px); left: 16px; right: 16px;
-      background: white; border: 1.5px solid #E2E8F0; border-radius: 10px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.12); z-index: 10000;
-      overflow: hidden; max-height: 200px; overflow-y: auto;
+    /* Style Google's PlaceAutocompleteElement to match our app */
+    .map-search-area gmp-place-autocomplete {
+      width:100%;
+      --gmp-input-padding-top: 10px;
+      --gmp-input-padding-bottom: 10px;
+      --gmp-input-padding-left: 14px;
+      --gmp-input-padding-right: 14px;
+      --gmp-input-font-size: 15px;
+      --gmp-input-border-radius: 10px;
+      --gmp-input-border-color: #E2E8F0;
+      --gmp-input-focus-border-color: #1565C0;
     }
 
-    /* Map itself */
-    #gmap { flex: 1; width: 100%; }
+    /* map */
+    #gmap { flex:1; width:100%; }
 
-    /* Footer with selected address */
+    /* footer */
     .map-footer {
-      padding: 12px 16px;
-      background: white;
-      border-top: 1px solid #E2E8F0;
-      flex-shrink: 0;
+      padding:12px 16px; background:white;
+      border-top:1px solid #E2E8F0; flex-shrink:0;
     }
     #map-addr-preview {
-      font-size: 13px; color: #4A5568; line-height: 1.5;
-      min-height: 20px;
+      font-size:13px; color:#4A5568; line-height:1.5; min-height:20px;
     }
     .map-my-loc-btn {
-      margin-top: 8px;
-      background: none; border: 1.5px solid #1565C0;
-      color: #1565C0; border-radius: 8px; padding: 7px 14px;
-      font-size: 13px; cursor: pointer; font-weight: 500;
+      margin-top:8px; background:none; border:1.5px solid #1565C0;
+      color:#1565C0; border-radius:8px; padding:7px 14px;
+      font-size:13px; font-weight:500; cursor:pointer;
     }
-    .map-my-loc-btn:active { background: #EBF4FF; }
+    .map-my-loc-btn:active { background:#EBF4FF; }
 
-    /* ── Result View ── */
-    #result { display: none; padding: 0 16px 24px; }
+    /* ════════════ RESULT ════════════ */
+    #result { display:none; padding:0 16px 24px; }
 
-    .result-header { border-radius: 16px; padding: 20px; color: white; margin-bottom: 12px; }
-    .result-header.safe     { background: linear-gradient(135deg, #2E7D32, #388E3C); }
-    .result-header.light    { background: linear-gradient(135deg, #1565C0, #1976D2); }
-    .result-header.moderate { background: linear-gradient(135deg, #E65100, #F57C00); }
-    .result-header.heavy    { background: linear-gradient(135deg, #B71C1C, #C62828); }
+    .result-header { border-radius:16px; padding:20px; color:white; margin-bottom:12px; }
+    .result-header.safe     { background:linear-gradient(135deg,#2E7D32,#388E3C); }
+    .result-header.light    { background:linear-gradient(135deg,#1565C0,#1976D2); }
+    .result-header.moderate { background:linear-gradient(135deg,#E65100,#F57C00); }
+    .result-header.heavy    { background:linear-gradient(135deg,#B71C1C,#C62828); }
 
-    .result-header .big-emoji { font-size: 36px; margin-bottom: 8px; }
-    .result-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-    .result-header .meta { font-size: 12px; opacity: .8; }
+    .result-header .big-emoji { font-size:36px; margin-bottom:8px; }
+    .result-header h2 { font-size:20px; font-weight:700; margin-bottom:4px; }
+    .result-header .meta { font-size:12px; opacity:.8; }
 
-    .risk-bar-wrap { margin: 12px 0; }
-    .risk-label { font-size: 12px; opacity: .85; margin-bottom: 6px; }
-    .risk-bar { background: rgba(255,255,255,.25); border-radius: 99px; height: 8px; }
-    .risk-fill { background: white; border-radius: 99px; height: 8px; transition: width .6s ease; }
+    .risk-bar-wrap { margin:12px 0; }
+    .risk-label { font-size:12px; opacity:.85; margin-bottom:6px; }
+    .risk-bar { background:rgba(255,255,255,.25); border-radius:99px; height:8px; }
+    .risk-fill { background:white; border-radius:99px; height:8px; transition:width .6s ease; }
 
     .section-title {
-      font-size: 13px; font-weight: 600; color: #718096;
-      text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 10px;
+      font-size:13px; font-weight:600; color:#718096;
+      text-transform:uppercase; letter-spacing:.5px; margin:16px 0 10px;
     }
-    .timeline { list-style: none; }
+    .timeline { list-style:none; }
     .timeline li {
-      display: flex; align-items: flex-start; padding: 10px 0;
-      border-bottom: 1px solid #F7FAFC;
+      display:flex; align-items:flex-start; padding:10px 0;
+      border-bottom:1px solid #F7FAFC;
     }
-    .timeline li:last-child { border-bottom: none; }
-    .tl-time { font-size: 13px; color: #718096; width: 46px; flex-shrink: 0; padding-top: 1px; }
+    .timeline li:last-child { border-bottom:none; }
+    .tl-time { font-size:13px; color:#718096; width:46px; flex-shrink:0; padding-top:1px; }
     .tl-dot {
-      width: 28px; height: 28px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px; flex-shrink: 0; margin: 0 10px;
+      width:28px; height:28px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px; flex-shrink:0; margin:0 10px;
     }
-    .tl-dot.none     { background: #F0FFF4; }
-    .tl-dot.light    { background: #EBF4FF; }
-    .tl-dot.moderate { background: #FFFAF0; }
-    .tl-dot.heavy    { background: #FFF5F5; }
-    .tl-dot.violent  { background: #FAF5FF; }
-    .tl-info { flex: 1; }
-    .tl-name { font-size: 14px; font-weight: 500; color: #1A202C; }
-    .tl-desc { font-size: 12px; color: #718096; margin-top: 2px; }
+    .tl-dot.none     { background:#F0FFF4; }
+    .tl-dot.light    { background:#EBF4FF; }
+    .tl-dot.moderate { background:#FFFAF0; }
+    .tl-dot.heavy    { background:#FFF5F5; }
+    .tl-dot.violent  { background:#FAF5FF; }
+    .tl-info { flex:1; }
+    .tl-name { font-size:14px; font-weight:500; color:#1A202C; }
+    .tl-desc { font-size:12px; color:#718096; margin-top:2px; }
 
     .rec-card {
-      background: #EBF4FF; border-left: 4px solid #1565C0;
-      border-radius: 0 10px 10px 0; padding: 14px; margin: 8px 0;
+      background:#EBF4FF; border-left:4px solid #1565C0;
+      border-radius:0 10px 10px 0; padding:14px; margin:8px 0;
     }
-    .rec-card.warning { background: #FFFAF0; border-color: #E65100; }
-    .rec-card.danger  { background: #FFF5F5; border-color: #C62828; }
-    .rec-card .rec-title { font-size: 13px; font-weight: 600; color: #1565C0; margin-bottom: 4px; }
-    .rec-card.warning .rec-title { color: #E65100; }
-    .rec-card.danger  .rec-title { color: #C62828; }
-    .rec-card .rec-text { font-size: 14px; color: #1A202C; line-height: 1.5; }
+    .rec-card.warning { background:#FFFAF0; border-color:#E65100; }
+    .rec-card.danger  { background:#FFF5F5; border-color:#C62828; }
+    .rec-card .rec-title { font-size:13px; font-weight:600; color:#1565C0; margin-bottom:4px; }
+    .rec-card.warning .rec-title { color:#E65100; }
+    .rec-card.danger  .rec-title { color:#C62828; }
+    .rec-card .rec-text { font-size:14px; color:#1A202C; line-height:1.5; }
 
     .alt-depart {
-      background: #F0FFF4; border-radius: 10px; padding: 14px; margin-top: 10px;
-      display: flex; align-items: center; gap: 10px;
+      background:#F0FFF4; border-radius:10px; padding:14px; margin-top:10px;
+      display:flex; align-items:center; gap:10px;
     }
-    .alt-depart .alt-text { font-size: 13px; color: #276749; }
-    .alt-depart .alt-time { font-size: 16px; font-weight: 700; color: #276749; }
+    .alt-depart .alt-text { font-size:13px; color:#276749; }
+    .alt-depart .alt-time { font-size:16px; font-weight:700; color:#276749; }
 
     .btn-send {
-      width: 100%; background: #06C755; color: white; border: none;
-      border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600;
-      cursor: pointer; margin-top: 16px;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width:100%; background:#06C755; color:white; border:none; border-radius:12px;
+      padding:14px; font-size:15px; font-weight:600; cursor:pointer; margin-top:16px;
+      display:flex; align-items:center; justify-content:center; gap:8px;
     }
-    .btn-send:active { opacity: .85; }
+    .btn-send:active { opacity:.85; }
     .btn-back {
-      width: 100%; background: transparent; color: #718096;
-      border: 1.5px solid #E2E8F0; border-radius: 12px;
-      padding: 12px; font-size: 14px; cursor: pointer; margin-top: 8px;
+      width:100%; background:transparent; color:#718096;
+      border:1.5px solid #E2E8F0; border-radius:12px;
+      padding:12px; font-size:14px; cursor:pointer; margin-top:8px;
     }
   </style>
 </head>
 <body>
 
-<!-- ─── Form View ─── -->
+<!-- ─── Form ─── -->
 <div id="view-form">
   <div class="header">
     <h1>🗺️ Rain Route</h1>
@@ -314,17 +281,17 @@
 
   <div class="card">
     <label>ต้นทาง</label>
-    <div class="input-wrap" id="wrap-origin">
+    <div class="input-wrap">
       <span class="icon">📍</span>
       <input id="origin" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-origin"></div>
-      <button class="icon-btn" id="gps-origin"  onclick="detectGPS('origin')"      title="ตำแหน่งปัจจุบัน">🎯</button>
-      <button class="icon-btn"                   onclick="openMapPicker('origin')"  title="เปิดแผนที่">🗺️</button>
+      <button class="icon-btn" id="gps-origin"       onclick="detectGPS('origin')"      title="ตำแหน่งปัจจุบัน">🎯</button>
+      <button class="icon-btn"                        onclick="openMapPicker('origin')"  title="เปิดแผนที่">🗺️</button>
       <div class="ac-dropdown" id="dropdown-origin"></div>
     </div>
 
     <label>ปลายทาง</label>
-    <div class="input-wrap" id="wrap-destination">
+    <div class="input-wrap">
       <span class="icon">🏁</span>
       <input id="destination" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-destination"></div>
@@ -347,16 +314,11 @@
     <button class="btn-analyze" onclick="analyze()">🔍 วิเคราะห์เส้นทาง</button>
   </div>
 
-  <div id="loading">
-    <div class="spinner"></div>
-    <p>กำลังวิเคราะห์เส้นทาง...</p>
-  </div>
+  <div id="loading"><div class="spinner"></div><p>กำลังวิเคราะห์เส้นทาง...</p></div>
   <div id="error-box"></div>
 </div>
 
-<!-- ════════════════════════════════════════
-     MAP MODAL
-════════════════════════════════════════ -->
+<!-- ─── Map Modal ─── -->
 <div id="map-modal">
   <div class="map-topbar">
     <button class="map-close-btn" onclick="closeMapModal()">✕ ปิด</button>
@@ -364,34 +326,29 @@
     <button class="map-ok-btn" id="map-ok-btn" onclick="confirmMapLocation()" disabled>เลือก ✓</button>
   </div>
 
-  <!-- Search inside modal -->
-  <div class="map-search-bar">
-    <input id="map-search-input" type="text" placeholder="🔍 ค้นหาสถานที่..." autocomplete="off" />
-    <div id="map-search-dropdown"></div>
-  </div>
+  <!-- Google PlaceAutocompleteElement goes here -->
+  <div class="map-search-area" id="map-search-area"></div>
 
-  <!-- Google Map -->
   <div id="gmap"></div>
 
-  <!-- Footer: current selected address -->
   <div class="map-footer">
     <div id="map-addr-preview">📍 แตะบนแผนที่เพื่อเลือกตำแหน่ง</div>
     <button class="map-my-loc-btn" onclick="centerMapToMyLocation()">🎯 ตำแหน่งของฉัน</button>
   </div>
 </div>
 
-<!-- ─── Result View ─── -->
+<!-- ─── Result ─── -->
 <div id="result">
   <div id="res-header" class="result-header safe" style="margin:0;border-radius:0;padding:24px 20px 32px;">
     <div class="big-emoji" id="res-emoji">☀️</div>
-    <h2 id="res-headline">ฟ้าใส ออกได้เลย</h2>
+    <h2 id="res-headline"></h2>
     <div class="meta" id="res-meta"></div>
     <div class="risk-bar-wrap">
       <div class="risk-label">โอกาสเจอฝนตลอดเส้นทาง <span id="res-risk">0</span>%</div>
       <div class="risk-bar"><div class="risk-fill" id="risk-fill" style="width:0%"></div></div>
     </div>
   </div>
-  <div style="padding: 0 16px;">
+  <div style="padding:0 16px;">
     <div class="rec-card" id="rec-card">
       <div class="rec-title">💡 คำแนะนำ</div>
       <div class="rec-text" id="rec-text"></div>
@@ -405,70 +362,53 @@
     </div>
     <p class="section-title">สภาพอากาศตลอดเส้นทาง</p>
     <ul class="timeline" id="timeline"></ul>
-    <button class="btn-send" onclick="sendToChat()">
-      <span>💬</span> ส่งผลลัพธ์ไปที่แชต LINE
-    </button>
+    <button class="btn-send" onclick="sendToChat()"><span>💬</span> ส่งผลลัพธ์ไปที่แชต LINE</button>
     <button class="btn-back" onclick="showForm()">← วิเคราะห์เส้นทางใหม่</button>
   </div>
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────
-let selectedTime  = 'now';
-let lastResult    = null;
-let mapInstance   = null;
-let mapMarker     = null;
-let mapTargetField = '';
-let mapSelectedAddr = '';
-let mapsJsLoaded  = false;
-
 const LIFF_ID = '__LIFF_ID__';
-const MAPS_KEY = '__MAPS_KEY__';
 
-// ─── LIFF Init + auto GPS ─────────────────────────
+let selectedTime     = 'now';
+let lastResult       = null;
+let mapInstance      = null;
+let mapMarker        = null;
+let mapTargetField   = '';
+let mapSelectedAddr  = '';
+let mapInitialised   = false;
+
+// ── LIFF + auto GPS ──────────────────────────────
 (async () => {
   try { await liff.init({ liffId: LIFF_ID }); } catch (e) { console.warn('LIFF:', e.message); }
   detectGPS('origin', true);
 })();
 
-// ─── GPS Location ─────────────────────────────────
+// ── GPS ──────────────────────────────────────────
 async function detectGPS(field, silent = false) {
-  if (!navigator.geolocation) {
-    if (!silent) showError('เบราว์เซอร์นี้ไม่รองรับ GPS');
-    return;
-  }
+  if (!navigator.geolocation) { if (!silent) showError('GPS ไม่รองรับ'); return; }
   const btn   = document.getElementById(`gps-${field}`);
   const input = document.getElementById(field);
   btn.classList.add('locating');
   input.placeholder = 'กำลังระบุตำแหน่ง...';
-
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
       try {
         const res  = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
         const data = await res.json();
         input.value = data.address || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      } catch {
-        if (!silent) showError('ไม่สามารถแปลงพิกัดได้');
-      } finally {
-        btn.classList.remove('locating');
-        input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...';
-      }
+      } catch { if (!silent) showError('แปลงพิกัดไม่ได้'); }
+      finally { btn.classList.remove('locating'); input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...'; }
     },
     (err) => {
-      btn.classList.remove('locating');
-      input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...';
-      if (!silent) {
-        showError(err.code === 1
-          ? 'กรุณาอนุญาตให้เข้าถึง GPS ในการตั้งค่าเบราว์เซอร์'
-          : 'ไม่สามารถระบุตำแหน่งได้');
-      }
+      btn.classList.remove('locating'); input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...';
+      if (!silent) showError(err.code === 1 ? 'กรุณาอนุญาต GPS ในการตั้งค่าเบราว์เซอร์' : 'ระบุตำแหน่งไม่ได้');
     },
     { timeout: 10000, enableHighAccuracy: true }
   );
 }
 
-// ─── Custom Autocomplete (text search) ───────────
+// ── Text-input autocomplete (backend proxy) ───────
 function setupAutocomplete(inputId, dropdownId, loadingId) {
   const input    = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
@@ -480,227 +420,140 @@ function setupAutocomplete(inputId, dropdownId, loadingId) {
     const q = input.value.trim();
     if (q.length < 2) { hide(); return; }
     loadEl.style.display = 'block';
-    timer = setTimeout(() => fetchSuggestions(q), 350);
+    timer = setTimeout(() => fetchSug(q), 350);
   });
-
   input.addEventListener('keydown', (e) => {
     const items = dropdown.querySelectorAll('.ac-item');
     if (!items.length) return;
-    if (e.key === 'ArrowDown')  { active = Math.min(active+1, items.length-1); highlight(items); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { active = Math.max(active-1, -1); highlight(items); e.preventDefault(); }
-    else if (e.key === 'Enter' && active >= 0) { items[active].dispatchEvent(new Event('mousedown')); e.preventDefault(); }
-    else if (e.key === 'Escape') hide();
+    if (e.key==='ArrowDown')  { active=Math.min(active+1,items.length-1); hl(items); e.preventDefault(); }
+    else if(e.key==='ArrowUp'){ active=Math.max(active-1,-1); hl(items); e.preventDefault(); }
+    else if(e.key==='Enter'&&active>=0){ items[active].dispatchEvent(new Event('mousedown')); e.preventDefault(); }
+    else if(e.key==='Escape') hide();
   });
-
   document.addEventListener('mousedown', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) hide();
   });
 
-  async function fetchSuggestions(q) {
+  async function fetchSug(q) {
     try {
       const res  = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
       const data = await res.json();
-      loadEl.style.display = 'none';
-      show(data);
-    } catch { loadEl.style.display = 'none'; hide(); }
+      loadEl.style.display = 'none'; show(data);
+    } catch { loadEl.style.display='none'; hide(); }
   }
-
   function show(items) {
     if (!items?.length) { hide(); return; }
     dropdown.innerHTML = '';
     items.forEach(item => {
-      const parts = item.description.split(',');
-      const main  = parts[0].trim();
-      const sub   = parts.slice(1).join(',').trim();
-      const div   = document.createElement('div');
-      div.className = 'ac-item';
-      div.innerHTML = `<span class="ac-item-icon">📍</span>
-        <div><div class="ac-item-main">${main}</div>${sub ? `<div class="ac-item-sub">${sub}</div>` : ''}</div>`;
-      div.addEventListener('mousedown', (e) => {
-        e.preventDefault(); input.value = item.description; hide();
-      });
-      dropdown.appendChild(div);
+      const p = item.description.split(',');
+      const d = document.createElement('div');
+      d.className = 'ac-item';
+      d.innerHTML = `<span class="ac-item-icon">📍</span><div>
+        <div class="ac-item-main">${p[0]}</div>
+        ${p.slice(1).join(',').trim() ? `<div class="ac-item-sub">${p.slice(1).join(',').trim()}</div>` : ''}
+      </div>`;
+      d.addEventListener('mousedown', (e) => { e.preventDefault(); input.value=item.description; hide(); });
+      dropdown.appendChild(d);
     });
-    dropdown.style.display = 'block';
-    active = -1;
+    dropdown.style.display = 'block'; active = -1;
   }
-
-  function highlight(items) {
-    items.forEach((el, i) => el.style.background = i === active ? '#EBF4FF' : '');
-    if (active >= 0) items[active].scrollIntoView({ block: 'nearest' });
+  function hl(items) {
+    items.forEach((el,i) => el.style.background = i===active?'#EBF4FF':'');
+    if (active>=0) items[active].scrollIntoView({block:'nearest'});
   }
-
-  function hide() {
-    dropdown.style.display = 'none'; dropdown.innerHTML = '';
-    loadEl.style.display = 'none'; active = -1;
-  }
+  function hide() { dropdown.style.display='none'; dropdown.innerHTML=''; loadEl.style.display='none'; active=-1; }
 }
 
 setupAutocomplete('origin',      'dropdown-origin',      'loading-origin');
 setupAutocomplete('destination', 'dropdown-destination', 'loading-destination');
 
-// ─── Load Google Maps JS ─────────────────────────
-function loadMapsJS() {
-  return new Promise((resolve, reject) => {
-    if (window.google?.maps) { resolve(); return; }
-    if (!MAPS_KEY) { reject(new Error('No Maps key')); return; }
-    window.__mapsResolve = resolve;
-    const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&loading=async&callback=__mapsReady`;
-    s.async = true;
-    s.onerror = () => reject(new Error('Maps JS failed to load'));
-    document.head.appendChild(s);
-  });
-}
-window.__mapsReady = () => { mapsJsLoaded = true; if (window.__mapsResolve) window.__mapsResolve(); };
-
-// ─── Map Picker ───────────────────────────────────
+// ── Map Modal ─────────────────────────────────────
 async function openMapPicker(field) {
   mapTargetField  = field;
   mapSelectedAddr = '';
   document.getElementById('map-addr-preview').textContent = '📍 แตะบนแผนที่เพื่อเลือกตำแหน่ง';
   document.getElementById('map-ok-btn').disabled = true;
-  document.getElementById('map-search-input').value = '';
   document.getElementById('map-modal').style.display = 'flex';
 
-  if (!mapInstance) {
-    try {
-      await loadMapsJS();
-      await initMap();
-    } catch (e) {
-      closeMapModal();
-      showError('ไม่สามารถโหลดแผนที่ได้: ' + e.message);
-      return;
-    }
-  } else {
-    // Re-center to current location
-    centerMapToMyLocation(true);
+  if (!mapInitialised) {
+    try { await initMap(); }
+    catch (e) { closeMapModal(); showError('โหลดแผนที่ไม่ได้: ' + e.message); }
   }
 }
 
 async function initMap() {
-  // Default center = Bangkok
+  // Use Google Maps importLibrary (new async pattern — no deprecation warnings)
+  const [{ Map }, { PlaceAutocompleteElement }, { Marker }] = await Promise.all([
+    google.maps.importLibrary('maps'),
+    google.maps.importLibrary('places'),
+    google.maps.importLibrary('marker'),
+  ]);
+
+  // Center on current GPS, fallback = Bangkok
   let center = { lat: 13.7563, lng: 100.5018 };
-
-  // Try GPS
   try {
-    center = await new Promise((res, rej) => {
+    center = await new Promise((res, rej) =>
       navigator.geolocation.getCurrentPosition(
-        ({ coords }) => res({ lat: coords.latitude, lng: coords.longitude }),
-        rej,
-        { timeout: 5000 }
-      );
-    });
-  } catch { /* use Bangkok */ }
+        ({ coords: c }) => res({ lat: c.latitude, lng: c.longitude }),
+        rej, { timeout: 5000 }
+      )
+    );
+  } catch { /* use Bangkok default */ }
 
-  mapInstance = new google.maps.Map(document.getElementById('gmap'), {
-    center,
-    zoom: 15,
-    mapTypeControl: false,
-    streetViewControl: false,
-    fullscreenControl: false,
+  mapInstance = new Map(document.getElementById('gmap'), {
+    center, zoom: 15,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
   });
 
-  mapInstance.addListener('click', (e) => onMapClick(e.latLng));
+  // ── Native Google Places search (PlaceAutocompleteElement) ──
+  const placeAC = new PlaceAutocompleteElement({
+    componentRestrictions: { country: 'th' },
+  });
+  placeAC.style.width = '100%';
+  document.getElementById('map-search-area').appendChild(placeAC);
 
-  // Setup map search bar
-  setupMapSearch();
-}
-
-async function onMapClick(latLng) {
-  const lat = latLng.lat(), lng = latLng.lng();
-
-  // Drop marker
-  if (mapMarker) mapMarker.setMap(null);
-  mapMarker = new google.maps.Marker({ position: latLng, map: mapInstance, animation: google.maps.Animation.DROP });
-
-  document.getElementById('map-addr-preview').textContent = '⏳ กำลังหาที่อยู่...';
-  document.getElementById('map-ok-btn').disabled = true;
-
-  try {
-    const res  = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lng}`);
-    const data = await res.json();
-    mapSelectedAddr = data.address;
-    document.getElementById('map-addr-preview').textContent = '📍 ' + data.address;
+  placeAC.addEventListener('gmp-placeselect', async ({ place }) => {
+    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+    const loc = place.location;
+    mapInstance.panTo(loc);
+    mapInstance.setZoom(16);
+    dropPin(loc);
+    mapSelectedAddr = place.formattedAddress || place.displayName;
+    document.getElementById('map-addr-preview').textContent = '📍 ' + mapSelectedAddr;
     document.getElementById('map-ok-btn').disabled = false;
-  } catch {
-    document.getElementById('map-addr-preview').textContent = '❌ ไม่สามารถระบุที่อยู่ได้';
-  }
-}
-
-// Search bar inside map modal
-function setupMapSearch() {
-  const searchInput = document.getElementById('map-search-input');
-  const searchDrop  = document.getElementById('map-search-dropdown');
-  let timer = null;
-
-  // Reuse .ac-item styles
-  searchDrop.style.cssText = `
-    display:none; position:absolute; top:100%; left:0; right:0; margin-top:4px;
-    background:white; border:1.5px solid #E2E8F0; border-radius:10px;
-    box-shadow:0 4px 20px rgba(0,0,0,.12); z-index:10001;
-    overflow:hidden; max-height:200px; overflow-y:auto;
-  `;
-
-  searchInput.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = searchInput.value.trim();
-    if (q.length < 2) { searchDrop.style.display = 'none'; return; }
-    timer = setTimeout(async () => {
-      try {
-        const res   = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
-        const items = await res.json();
-        if (!items.length) { searchDrop.style.display = 'none'; return; }
-        searchDrop.innerHTML = '';
-        items.forEach(item => {
-          const div = document.createElement('div');
-          div.className = 'ac-item';
-          const parts = item.description.split(',');
-          div.innerHTML = `<span class="ac-item-icon">📍</span>
-            <div><div class="ac-item-main">${parts[0]}</div>
-            ${parts.slice(1).join(',').trim() ? `<div class="ac-item-sub">${parts.slice(1).join(',').trim()}</div>` : ''}</div>`;
-          div.addEventListener('mousedown', async (e) => {
-            e.preventDefault();
-            searchInput.value = item.description;
-            searchDrop.style.display = 'none';
-            // Geocode to get lat/lon
-            await panMapToPlace(item.description, item.place_id);
-          });
-          searchDrop.appendChild(div);
-        });
-        searchDrop.style.display = 'block';
-      } catch { searchDrop.style.display = 'none'; }
-    }, 350);
   });
 
-  document.addEventListener('mousedown', (e) => {
-    if (!searchInput.contains(e.target) && !searchDrop.contains(e.target))
-      searchDrop.style.display = 'none';
-  });
-}
-
-async function panMapToPlace(address, placeId) {
-  try {
-    // Use Geocoding API via backend
-    const res  = await fetch(`/api/geocode?place_id=${encodeURIComponent(placeId)}`);
-    const data = await res.json();
-    if (data.lat && data.lon) {
-      const latLng = new google.maps.LatLng(data.lat, data.lon);
-      mapInstance.panTo(latLng);
-      mapInstance.setZoom(16);
-      onMapClick(latLng);
+  // ── Tap on map → drop pin + reverse geocode ──
+  mapInstance.addListener('click', async (e) => {
+    const latLng = e.latLng;
+    dropPin(latLng);
+    document.getElementById('map-addr-preview').textContent = '⏳ กำลังหาที่อยู่...';
+    document.getElementById('map-ok-btn').disabled = true;
+    try {
+      const res  = await fetch(`/api/reverse-geocode?lat=${latLng.lat()}&lon=${latLng.lng()}`);
+      const data = await res.json();
+      mapSelectedAddr = data.address;
+      document.getElementById('map-addr-preview').textContent = '📍 ' + data.address;
+      document.getElementById('map-ok-btn').disabled = false;
+    } catch {
+      document.getElementById('map-addr-preview').textContent = '❌ ระบุที่อยู่ไม่ได้';
     }
-  } catch { /* silently ignore */ }
+  });
+
+  // Store Marker class for reuse
+  window._GMMarker = Marker;
+  mapInitialised = true;
 }
 
-function centerMapToMyLocation(silent = false) {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    ({ coords }) => {
-      const pos = { lat: coords.latitude, lng: coords.longitude };
-      if (mapInstance) { mapInstance.panTo(pos); mapInstance.setZoom(16); }
-    },
-    () => { if (!silent) alert('ไม่สามารถระบุตำแหน่งได้'); }
+function dropPin(position) {
+  if (mapMarker) mapMarker.setMap(null);
+  mapMarker = new window._GMMarker({ position, map: mapInstance, animation: google.maps.Animation.DROP });
+}
+
+function centerMapToMyLocation() {
+  navigator.geolocation?.getCurrentPosition(
+    ({ coords: c }) => { mapInstance?.panTo({ lat: c.latitude, lng: c.longitude }); mapInstance?.setZoom(16); },
+    () => alert('ไม่สามารถระบุตำแหน่งได้')
   );
 }
 
@@ -713,172 +566,129 @@ function confirmMapLocation() {
 
 function closeMapModal() {
   document.getElementById('map-modal').style.display = 'none';
-  document.getElementById('map-search-dropdown').style.display = 'none';
 }
 
-// ─── Time Selector ───────────────────────────────
+// ── Time Selector ─────────────────────────────────
 function selectTime(btn) {
   document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  selectedTime = btn.dataset.val;
+  btn.classList.add('active'); selectedTime = btn.dataset.val;
   const wrap = document.getElementById('custom-time-wrap');
   if (selectedTime === 'custom') {
     wrap.classList.add('show');
-    const now = new Date();
+    const n = new Date();
     document.getElementById('custom-time').value =
-      `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  } else {
-    wrap.classList.remove('show');
-  }
+      `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  } else { wrap.classList.remove('show'); }
 }
 
 function getDepartureISO() {
   const now = new Date();
-  if (selectedTime === 'now')    return now.toISOString();
-  if (selectedTime === '+30')    return new Date(now.getTime() + 30*60000).toISOString();
-  if (selectedTime === '+60')    return new Date(now.getTime() + 60*60000).toISOString();
-  if (selectedTime === 'custom') {
-    const [h, m] = document.getElementById('custom-time').value.split(':').map(Number);
-    const t = new Date(now);
-    t.setHours(h, m, 0, 0);
-    if (t < now) t.setDate(t.getDate() + 1);
+  if (selectedTime==='now')    return now.toISOString();
+  if (selectedTime==='+30')    return new Date(now.getTime()+30*60000).toISOString();
+  if (selectedTime==='+60')    return new Date(now.getTime()+60*60000).toISOString();
+  if (selectedTime==='custom') {
+    const [h,m] = document.getElementById('custom-time').value.split(':').map(Number);
+    const t = new Date(now); t.setHours(h,m,0,0);
+    if (t<now) t.setDate(t.getDate()+1);
     return t.toISOString();
   }
   return now.toISOString();
 }
 
-// ─── Analyze ─────────────────────────────────────
+// ── Analyze ───────────────────────────────────────
 async function analyze() {
   const origin = document.getElementById('origin').value.trim();
   const dest   = document.getElementById('destination').value.trim();
-  if (!origin || !dest) { showError('กรุณาใส่ต้นทางและปลายทางก่อนนะครับ'); return; }
-
-  hideError();
-  showLoading(true);
-
+  if (!origin||!dest) { showError('กรุณาใส่ต้นทางและปลายทางก่อน'); return; }
+  hideError(); showLoading(true);
   try {
     let uid = null;
     try { uid = liff.isLoggedIn() ? liff.getDecodedIDToken()?.sub : null; } catch {}
-
     const res = await fetch('/api/route-weather', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ origin, destination: dest, departure_iso: getDepartureISO(), uid }),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ origin, destination:dest, departure_iso:getDepartureISO(), uid }),
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error ${res.status}`);
-    }
-
+    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.detail||`Error ${res.status}`); }
     lastResult = await res.json();
     showResult(lastResult);
-  } catch (e) {
-    showError(e.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
-  } finally {
-    showLoading(false);
-  }
+  } catch (e) { showError(e.message||'เกิดข้อผิดพลาด'); }
+  finally { showLoading(false); }
 }
 
-// ─── Render Result ────────────────────────────────
+// ── Render Result ─────────────────────────────────
 function showResult(d) {
   document.getElementById('view-form').style.display = 'none';
   document.getElementById('result').style.display = 'block';
 
   const hdr = document.getElementById('res-header');
   hdr.className = 'result-header ' + (
-    d.risk_pct === 0                 ? 'safe'
-    : d.max_intensity === 'light'    ? 'light'
-    : d.max_intensity === 'moderate' ? 'moderate'
-    : 'heavy'
+    d.risk_pct===0 ? 'safe' : d.max_intensity==='light' ? 'light' :
+    d.max_intensity==='moderate' ? 'moderate' : 'heavy'
   );
-
   document.getElementById('res-emoji').textContent    = d.max_emoji;
   document.getElementById('res-headline').textContent = headlineText(d);
   document.getElementById('res-meta').textContent =
     `${d.origin} → ${d.destination}  ·  ออก ${d.departure_str}  ·  ${d.duration_min} นาที`;
-  document.getElementById('res-risk').textContent    = d.risk_pct;
-  document.getElementById('risk-fill').style.width   = d.risk_pct + '%';
+  document.getElementById('res-risk').textContent   = d.risk_pct;
+  document.getElementById('risk-fill').style.width  = d.risk_pct + '%';
 
   const rc = document.getElementById('rec-card');
-  rc.className = 'rec-card ' + (d.risk_pct >= 75 ? 'danger' : d.risk_pct >= 40 ? 'warning' : '');
+  rc.className = 'rec-card ' + (d.risk_pct>=75?'danger':d.risk_pct>=40?'warning':'');
   document.getElementById('rec-text').textContent = d.recommendation;
 
-  const altEl = document.getElementById('alt-depart');
+  const alt = document.getElementById('alt-depart');
   if (d.best_alt_departure) {
-    altEl.style.display = 'flex';
+    alt.style.display='flex';
     document.getElementById('alt-time').textContent = d.best_alt_departure;
-  } else {
-    altEl.style.display = 'none';
-  }
+  } else alt.style.display='none';
 
-  const tl = document.getElementById('timeline');
-  tl.innerHTML = '';
+  const tl = document.getElementById('timeline'); tl.innerHTML='';
   d.waypoints.forEach(wp => {
     const li = document.createElement('li');
-    li.innerHTML = `
-      <div class="tl-time">${wp.eta_str}</div>
+    li.innerHTML=`<div class="tl-time">${wp.eta_str}</div>
       <div class="tl-dot ${wp.intensity}">${wp.emoji}</div>
       <div class="tl-info">
         <div class="tl-name">${wp.name}</div>
-        <div class="tl-desc">${wp.intensity_th}${wp.mm > 0 ? ' · '+wp.mm+' mm/hr' : ''}</div>
+        <div class="tl-desc">${wp.intensity_th}${wp.mm>0?' · '+wp.mm+' mm/hr':''}</div>
       </div>`;
     tl.appendChild(li);
   });
 }
 
 function headlineText(d) {
-  if (d.risk_pct === 0)                return 'ฟ้าใส ออกได้เลย ☀️';
-  if (d.risk_pct < 30)                 return 'มีฝนเล็กน้อยบางช่วง';
-  if (d.max_intensity === 'light')     return 'ฝนเล็กน้อยบางจุด';
-  if (d.max_intensity === 'moderate')  return 'ฝนปานกลาง ระวังด้วยนะ';
+  if (d.risk_pct===0)               return 'ฟ้าใส ออกได้เลย ☀️';
+  if (d.risk_pct<30)                return 'มีฝนเล็กน้อยบางช่วง';
+  if (d.max_intensity==='light')    return 'ฝนเล็กน้อยบางจุด';
+  if (d.max_intensity==='moderate') return 'ฝนปานกลาง ระวังด้วยนะ';
   return 'ฝนหนัก ควรเลื่อนเวลา';
 }
 
-// ─── Send to LINE ─────────────────────────────────
+// ── Send to LINE ──────────────────────────────────
 async function sendToChat() {
   if (!lastResult) return;
   const d = lastResult;
-  const rain_list = d.rain_waypoints.length > 0
-    ? d.rain_waypoints.map(w => `• ${w.name}  ${w.emoji}  ${w.eta_str}`).join('\n')
+  const rain = d.rain_waypoints.length>0
+    ? d.rain_waypoints.map(w=>`• ${w.name}  ${w.emoji}  ${w.eta_str}`).join('\n')
     : '• ไม่พบฝนตลอดเส้นทาง ✅';
   const msg = [
     `🗺️ Rain Route — ${d.origin} → ${d.destination}`,
     `⏰ ออก ${d.departure_str}  |  🚗 ${d.duration_min} นาที`,
     `☔ ความเสี่ยงเจอฝน ${d.risk_pct}%`,
-    '', '📍 จุดที่มีฝน:', rain_list, '',
+    '','📍 จุดที่มีฝน:',rain,'',
     `💡 ${d.recommendation}`,
-    d.best_alt_departure ? `⏰ แนะนำออก ${d.best_alt_departure} แทน` : '',
+    d.best_alt_departure?`⏰ แนะนำออก ${d.best_alt_departure} แทน`:'',
   ].filter(Boolean).join('\n').trim();
-
   try {
-    if (liff.isInClient()) {
-      await liff.sendMessages([{ type: 'text', text: msg }]);
-      liff.closeWindow();
-    } else {
-      await navigator.clipboard.writeText(msg);
-      alert('คัดลอกผลลัพธ์แล้ว!');
-    }
-  } catch (e) { alert('ไม่สามารถส่งข้อความได้: ' + e.message); }
+    if (liff.isInClient()) { await liff.sendMessages([{type:'text',text:msg}]); liff.closeWindow(); }
+    else { await navigator.clipboard.writeText(msg); alert('คัดลอกแล้ว!'); }
+  } catch (e) { alert('ส่งไม่ได้: '+e.message); }
 }
 
-// ─── UI Helpers ──────────────────────────────────
-function showForm() {
-  document.getElementById('view-form').style.display = 'block';
-  document.getElementById('result').style.display = 'none';
-  hideError();
-}
-function showLoading(on) {
-  document.getElementById('loading').style.display = on ? 'block' : 'none';
-  document.querySelector('.btn-analyze').disabled = on;
-}
-function showError(msg) {
-  const el = document.getElementById('error-box');
-  el.textContent = '❌ ' + msg; el.style.display = 'block';
-}
-function hideError() {
-  document.getElementById('error-box').style.display = 'none';
-}
+// ── Helpers ───────────────────────────────────────
+function showForm()   { document.getElementById('view-form').style.display='block'; document.getElementById('result').style.display='none'; hideError(); }
+function showLoading(on) { document.getElementById('loading').style.display=on?'block':'none'; document.querySelector('.btn-analyze').disabled=on; }
+function showError(msg)  { const e=document.getElementById('error-box'); e.textContent='❌ '+msg; e.style.display='block'; }
+function hideError()     { document.getElementById('error-box').style.display='none'; }
 </script>
 </body>
 </html>
