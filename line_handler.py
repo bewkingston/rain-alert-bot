@@ -346,11 +346,6 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
                     {"type": "text", "text": mins_text,
                      "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
                 ]},
-                {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888888", "size": "sm", "flex": 2},
-                    {"type": "text", "text": f"{forecast.precipitation_mm} mm/hr",
-                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
-                ]},
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {rec}", "wrap": True,
                  "color": "#333333", "size": "sm", "margin": "md"},
@@ -404,12 +399,6 @@ def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888888", "size": "sm", "flex": 2},
-                    {"type": "text",
-                     "text": f"{forecast.precipitation_mm} mm/hr" if forecast.will_rain else "0 mm/hr",
-                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
-                ]},
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {advice}", "wrap": True,
                  "color": "#333333", "size": "sm", "margin": "md"},
