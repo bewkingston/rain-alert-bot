@@ -132,41 +132,41 @@ async def analyze_route(
 
 
 # ─────────────────────────────────────────────
-#  Google Maps Directions
+#  Routing: Google Directions → OSRM fallback
 # ─────────────────────────────────────────────
 
+import re as _re
+
 async def _get_route_steps(origin: str, destination: str, dep_utc: datetime) -> list:
-    """คืน list ของ steps แต่ละขั้น พร้อม duration + end_location"""
+    """ลอง Google Directions ก่อน; ถ้าไม่ได้ใช้ Nominatim + OSRM"""
+    if GMAPS_KEY:
+        steps = await _google_directions(origin, destination, dep_utc)
+        if steps:
+            return steps
+        logger.warning("Google Directions failed — switching to OSRM")
+    return await _osrm_route(origin, destination)
+
+
+async def _google_directions(origin: str, destination: str, dep_utc: datetime) -> list:
     dep_unix = int(dep_utc.timestamp())
-    params = {
-        "origin"          : origin,
-        "destination"     : destination,
-        "departure_time"  : dep_unix,
-        "mode"            : "driving",
-        "language"        : "th",
-        "key"             : GMAPS_KEY,
-    }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 "https://maps.googleapis.com/maps/api/directions/json",
-                params=params,
+                params={
+                    "origin": origin, "destination": destination,
+                    "departure_time": dep_unix, "mode": "driving",
+                    "language": "th", "key": GMAPS_KEY,
+                },
             )
-            resp.raise_for_status()
             data = resp.json()
-
         if data.get("status") != "OK":
-            logger.error(f"Directions API: {data.get('status')} — {data.get('error_message','')}")
+            logger.warning(f"Directions API: {data.get('status')} — {data.get('error_message','')}")
             return []
-
-        legs  = data["routes"][0]["legs"]
         steps = []
-        for leg in legs:
+        for leg in data["routes"][0]["legs"]:
             for step in leg["steps"]:
-                # ชื่อ step = ถนนจาก html_instructions (strip HTML tags)
-                import re
-                name = re.sub(r'<[^>]+>', '', step.get("html_instructions", "")).strip()
-                name = name[:30] if len(name) > 30 else name
+                name = _re.sub(r'<[^>]+>', '', step.get("html_instructions", "")).strip()[:30]
                 steps.append({
                     "name"        : name or "จุดระหว่างทาง",
                     "end_lat"     : step["end_location"]["lat"],
@@ -174,9 +174,62 @@ async def _get_route_steps(origin: str, destination: str, dep_utc: datetime) -> 
                     "duration_sec": step["duration"]["value"],
                 })
         return steps
-
     except Exception as e:
-        logger.error(f"Directions API error: {e}")
+        logger.warning(f"Google Directions error: {e}")
+        return []
+
+
+async def _nominatim_geocode(query: str) -> tuple:
+    """Text → (lat, lon) ด้วย Nominatim/OpenStreetMap"""
+    async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "RainAlertBot/1.0"}) as c:
+        res  = await c.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1,
+                    "countrycodes": "th", "accept-language": "th"},
+        )
+        data = res.json()
+    if not data:
+        raise ValueError(f"ไม่พบสถานที่: {query}")
+    return float(data[0]["lat"]), float(data[0]["lon"])
+
+
+async def _osrm_route(origin: str, destination: str) -> list:
+    """Nominatim geocoding + OSRM driving route (ฟรี ไม่ต้อง billing)"""
+    try:
+        orig_lat, orig_lon = await _nominatim_geocode(origin)
+        dest_lat, dest_lon = await _nominatim_geocode(destination)
+
+        async with httpx.AsyncClient(timeout=12) as client:
+            resp = await client.get(
+                f"http://router.project-osrm.org/route/v1/driving/"
+                f"{orig_lon},{orig_lat};{dest_lon},{dest_lat}",
+                params={"overview": "false", "steps": "true"},
+            )
+            data = resp.json()
+
+        if data.get("code") != "Ok" or not data.get("routes"):
+            logger.error(f"OSRM error: {data.get('code')}")
+            return []
+
+        steps = []
+        for leg in data["routes"][0]["legs"]:
+            for step in leg.get("steps", []):
+                loc = step["maneuver"]["location"]   # [lon, lat]
+                dur = int(step.get("duration", 0))
+                if dur < 10:
+                    continue     # ตัด micro-steps ออก
+                steps.append({
+                    "name"        : step.get("name") or "จุดระหว่างทาง",
+                    "end_lat"     : loc[1],
+                    "end_lon"     : loc[0],
+                    "duration_sec": dur,
+                })
+        return steps
+
+    except ValueError as e:
+        raise RuntimeError(str(e))
+    except Exception as e:
+        logger.error(f"OSRM route error: {e}")
         return []
 
 

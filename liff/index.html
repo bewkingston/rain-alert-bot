@@ -165,18 +165,24 @@
       /* must NOT clip the places dropdown */
       overflow:visible; position:relative; z-index:100;
     }
-    /* Style Google's PlaceAutocompleteElement to match our app */
-    .map-search-area gmp-place-autocomplete {
-      width:100%;
-      --gmp-input-padding-top: 10px;
-      --gmp-input-padding-bottom: 10px;
-      --gmp-input-padding-left: 14px;
-      --gmp-input-padding-right: 14px;
-      --gmp-input-font-size: 15px;
-      --gmp-input-border-radius: 10px;
-      --gmp-input-border-color: #E2E8F0;
-      --gmp-input-focus-border-color: #1565C0;
+    /* Nominatim search inside map modal */
+    .map-search-input {
+      width:100%; padding:10px 14px; font-size:15px;
+      border:1.5px solid #E2E8F0; border-radius:10px; outline:none;
+      color:#1A202C; background:white;
     }
+    .map-search-input:focus { border-color:#1565C0; }
+    .map-suggest-box {
+      display:none; position:absolute; left:16px; right:16px; top:calc(100% - 10px);
+      background:white; border:1.5px solid #E2E8F0; border-radius:10px;
+      box-shadow:0 4px 20px rgba(0,0,0,.12); z-index:10000;
+      overflow:hidden; max-height:250px; overflow-y:auto;
+    }
+    .map-suggest-item {
+      padding:11px 14px; cursor:pointer; font-size:14px; color:#1A202C;
+      border-bottom:1px solid #F7FAFC; line-height:1.4;
+    }
+    .map-suggest-item:hover { background:#EBF4FF; }
 
     /* map */
     #gmap { flex:1; width:100%; }
@@ -394,9 +400,11 @@ async function detectGPS(field, silent = false) {
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
       try {
-        const res  = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
+        const res  = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=th`
+        );
         const data = await res.json();
-        input.value = data.address || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        input.value = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
       } catch { if (!silent) showError('แปลงพิกัดไม่ได้'); }
       finally { btn.classList.remove('locating'); input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...'; }
     },
@@ -436,9 +444,12 @@ function setupAutocomplete(inputId, dropdownId, loadingId) {
 
   async function fetchSug(q) {
     try {
-      const res  = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      loadEl.style.display = 'none'; show(data);
+      const res  = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`
+      );
+      const raw  = await res.json();
+      loadEl.style.display = 'none';
+      show(raw.map(d => ({ description: d.display_name })));
     } catch { loadEl.style.display='none'; hide(); }
   }
   function show(items) {
@@ -482,10 +493,8 @@ async function openMapPicker(field) {
 }
 
 async function initMap() {
-  // Use Google Maps importLibrary (new async pattern — no deprecation warnings)
-  const [{ Map }, { PlaceAutocompleteElement }, { Marker }] = await Promise.all([
+  const [{ Map }, { Marker }] = await Promise.all([
     google.maps.importLibrary('maps'),
-    google.maps.importLibrary('places'),
     google.maps.importLibrary('marker'),
   ]);
 
@@ -505,42 +514,74 @@ async function initMap() {
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
   });
 
-  // ── Native Google Places search (PlaceAutocompleteElement) ──
-  const placeAC = new PlaceAutocompleteElement({
-    componentRestrictions: { country: 'th' },
-  });
-  placeAC.style.width = '100%';
-  document.getElementById('map-search-area').appendChild(placeAC);
+  // ── Nominatim search for map modal ──
+  const mapSearchInput = document.createElement('input');
+  mapSearchInput.type = 'text';
+  mapSearchInput.placeholder = '🔍 ค้นหาสถานที่ในไทย...';
+  mapSearchInput.className = 'map-search-input';
 
-  placeAC.addEventListener('gmp-placeselect', async ({ place }) => {
-    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
-    const loc = place.location;
-    mapInstance.panTo(loc);
-    mapInstance.setZoom(16);
-    dropPin(loc);
-    mapSelectedAddr = place.formattedAddress || place.displayName;
-    document.getElementById('map-addr-preview').textContent = '📍 ' + mapSelectedAddr;
-    document.getElementById('map-ok-btn').disabled = false;
+  const mapSuggestBox = document.createElement('div');
+  mapSuggestBox.className = 'map-suggest-box';
+
+  const searchArea = document.getElementById('map-search-area');
+  searchArea.appendChild(mapSearchInput);
+  searchArea.appendChild(mapSuggestBox);
+
+  let nomTimer;
+  mapSearchInput.addEventListener('input', () => {
+    clearTimeout(nomTimer);
+    const q = mapSearchInput.value.trim();
+    if (q.length < 2) { mapSuggestBox.style.display = 'none'; return; }
+    nomTimer = setTimeout(async () => {
+      try {
+        const res   = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`);
+        const items = await res.json();
+        if (!items.length) { mapSuggestBox.style.display = 'none'; return; }
+        mapSuggestBox.innerHTML = '';
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'map-suggest-item';
+          div.textContent = '📍 ' + item.display_name;
+          div.addEventListener('click', () => {
+            const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
+            mapInstance.panTo({ lat, lng });
+            mapInstance.setZoom(16);
+            dropPin({ lat, lng });
+            mapSelectedAddr = item.display_name;
+            document.getElementById('map-addr-preview').textContent = '📍 ' + item.display_name;
+            document.getElementById('map-ok-btn').disabled = false;
+            mapSuggestBox.style.display = 'none';
+            mapSearchInput.value = '';
+          });
+          mapSuggestBox.appendChild(div);
+        });
+        mapSuggestBox.style.display = 'block';
+      } catch { mapSuggestBox.style.display = 'none'; }
+    }, 400);
+  });
+  document.addEventListener('click', (e) => {
+    if (!searchArea.contains(e.target)) mapSuggestBox.style.display = 'none';
   });
 
-  // ── Tap on map → drop pin + reverse geocode ──
+  // ── Tap on map → drop pin + Nominatim reverse geocode ──
   mapInstance.addListener('click', async (e) => {
     const latLng = e.latLng;
     dropPin(latLng);
     document.getElementById('map-addr-preview').textContent = '⏳ กำลังหาที่อยู่...';
     document.getElementById('map-ok-btn').disabled = true;
     try {
-      const res  = await fetch(`/api/reverse-geocode?lat=${latLng.lat()}&lon=${latLng.lng()}`);
+      const res  = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latLng.lat()}&lon=${latLng.lng()}&format=json&accept-language=th`
+      );
       const data = await res.json();
-      mapSelectedAddr = data.address;
-      document.getElementById('map-addr-preview').textContent = '📍 ' + data.address;
+      mapSelectedAddr = data.display_name || `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
+      document.getElementById('map-addr-preview').textContent = '📍 ' + mapSelectedAddr;
       document.getElementById('map-ok-btn').disabled = false;
     } catch {
       document.getElementById('map-addr-preview').textContent = '❌ ระบุที่อยู่ไม่ได้';
     }
   });
 
-  // Store Marker class for reuse
   window._GMMarker = Marker;
   mapInitialised = true;
 }
