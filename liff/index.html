@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Rain Route 🌧️</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- Google Maps Places API (injected by server) -->
+  <script>window._MAPS_KEY = '__MAPS_KEY__';</script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -43,6 +45,7 @@
       margin-bottom: 6px;
     }
 
+    /* ── Autocomplete Input ── */
     .input-wrap {
       display: flex;
       align-items: center;
@@ -51,6 +54,7 @@
       padding: 10px 12px;
       margin-bottom: 14px;
       transition: border-color .2s;
+      position: relative;
     }
     .input-wrap:focus-within { border-color: #1565C0; }
     .input-wrap .icon { font-size: 18px; margin-right: 8px; flex-shrink: 0; }
@@ -59,6 +63,34 @@
       font-size: 15px; color: #1A202C; background: transparent;
     }
     .input-wrap input::placeholder { color: #A0AEC0; }
+
+    /* ── Google Places Dropdown Override ── */
+    .pac-container {
+      border-radius: 10px !important;
+      border: 1.5px solid #E2E8F0 !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.12) !important;
+      font-family: -apple-system, 'Helvetica Neue', sans-serif !important;
+      margin-top: 4px !important;
+      overflow: hidden;
+    }
+    .pac-item {
+      padding: 10px 14px !important;
+      font-size: 14px !important;
+      cursor: pointer !important;
+      border-top: 1px solid #F7FAFC !important;
+    }
+    .pac-item:first-child { border-top: none !important; }
+    .pac-item:hover, .pac-item-selected {
+      background: #EBF4FF !important;
+    }
+    .pac-item-query {
+      font-size: 14px !important;
+      color: #1A202C !important;
+      font-weight: 500 !important;
+    }
+    .pac-matched { color: #1565C0 !important; }
+    .pac-icon { display: none !important; }
+    .pac-logo::after { display: none !important; }
 
     /* ── Time Selector ── */
     .time-grid {
@@ -156,15 +188,8 @@
 
     .risk-bar-wrap { margin: 12px 0; }
     .risk-label { font-size: 12px; opacity: .85; margin-bottom: 6px; }
-    .risk-bar {
-      background: rgba(255,255,255,.25);
-      border-radius: 99px; height: 8px;
-    }
-    .risk-fill {
-      background: white;
-      border-radius: 99px; height: 8px;
-      transition: width .6s ease;
-    }
+    .risk-bar { background: rgba(255,255,255,.25); border-radius: 99px; height: 8px; }
+    .risk-fill { background: white; border-radius: 99px; height: 8px; transition: width .6s ease; }
 
     /* ── Waypoint Timeline ── */
     .section-title {
@@ -180,10 +205,7 @@
       border-bottom: 1px solid #F7FAFC;
     }
     .timeline li:last-child { border-bottom: none; }
-    .tl-time {
-      font-size: 13px; color: #718096;
-      width: 46px; flex-shrink: 0; padding-top: 1px;
-    }
+    .tl-time { font-size: 13px; color: #718096; width: 46px; flex-shrink: 0; padding-top: 1px; }
     .tl-dot {
       width: 28px; height: 28px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -194,7 +216,6 @@
     .tl-dot.moderate { background: #FFFAF0; }
     .tl-dot.heavy    { background: #FFF5F5; }
     .tl-dot.violent  { background: #FAF5FF; }
-
     .tl-info { flex: 1; }
     .tl-name { font-size: 14px; font-weight: 500; color: #1A202C; }
     .tl-desc { font-size: 12px; color: #718096; margin-top: 2px; }
@@ -280,21 +301,21 @@
     <label>ต้นทาง</label>
     <div class="input-wrap">
       <span class="icon">📍</span>
-      <input id="origin" type="text" placeholder="เช่น True Digital Park, บางพลี" autocomplete="off" />
+      <input id="origin" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
     </div>
 
     <label>ปลายทาง</label>
     <div class="input-wrap">
       <span class="icon">🏁</span>
-      <input id="destination" type="text" placeholder="เช่น อโศก, เมกะบางนา" autocomplete="off" />
+      <input id="destination" type="text" placeholder="พิมพ์ชื่อสถานที่..." autocomplete="off" />
     </div>
 
     <label>เวลาออกเดินทาง</label>
     <div class="time-grid">
-      <button class="time-btn active" data-val="now" onclick="selectTime(this)">⚡ ตอนนี้</button>
-      <button class="time-btn" data-val="+30"  onclick="selectTime(this)">+30 นาที</button>
-      <button class="time-btn" data-val="+60"  onclick="selectTime(this)">+1 ชั่วโมง</button>
-      <button class="time-btn" data-val="custom" onclick="selectTime(this)">🕐 กำหนดเอง</button>
+      <button class="time-btn active" data-val="now"    onclick="selectTime(this)">⚡ ตอนนี้</button>
+      <button class="time-btn"        data-val="+30"   onclick="selectTime(this)">+30 นาที</button>
+      <button class="time-btn"        data-val="+60"   onclick="selectTime(this)">+1 ชั่วโมง</button>
+      <button class="time-btn"        data-val="custom" onclick="selectTime(this)">🕐 กำหนดเอง</button>
     </div>
     <div class="custom-time-wrap" id="custom-time-wrap">
       <input type="time" id="custom-time" />
@@ -303,7 +324,6 @@
     <button class="btn-analyze" onclick="analyze()">🔍 วิเคราะห์เส้นทาง</button>
   </div>
 
-  <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
     <p>กำลังวิเคราะห์เส้นทาง...</p>
@@ -349,24 +369,63 @@
 </div>
 
 <script>
-// ─── State ───────────────────────────────────
+// ─── State ───────────────────────────────────────
 let selectedTime = 'now';
 let lastResult   = null;
+let autocompleteOrigin = null;
+let autocompleteDestination = null;
 
-// ─── LIFF Init ───────────────────────────────
-const LIFF_ID = document.currentScript?.dataset?.liffId
-  || new URLSearchParams(location.search).get('liff_id')
-  || '__LIFF_ID__';      // จะถูกแทนโดย server
+// ─── LIFF Init ───────────────────────────────────
+const LIFF_ID = '__LIFF_ID__';
 
 (async () => {
   try {
     await liff.init({ liffId: LIFF_ID });
   } catch (e) {
-    console.warn('LIFF init failed (preview mode?):', e.message);
+    console.warn('LIFF init failed:', e.message);
   }
 })();
 
-// ─── Time Selector ───────────────────────────
+// ─── Google Maps Places Autocomplete ─────────────
+function initAutocomplete() {
+  const options = {
+    componentRestrictions: { country: 'th' },   // จำกัดเฉพาะไทย
+    fields: ['name', 'formatted_address', 'geometry'],
+    types: ['establishment', 'geocode'],          // ทั้งสถานที่และที่อยู่
+    language: 'th',
+  };
+
+  autocompleteOrigin = new google.maps.places.Autocomplete(
+    document.getElementById('origin'), options
+  );
+  autocompleteDestination = new google.maps.places.Autocomplete(
+    document.getElementById('destination'), options
+  );
+
+  // เมื่อ user เลือก suggestion → ใช้ชื่อสถานที่ (ไม่ต้องใช้ lat/lon เพราะ backend geocode เอง)
+  autocompleteOrigin.addListener('place_changed', () => {
+    const place = autocompleteOrigin.getPlace();
+    if (place.name) document.getElementById('origin').value = place.name;
+  });
+
+  autocompleteDestination.addListener('place_changed', () => {
+    const place = autocompleteDestination.getPlace();
+    if (place.name) document.getElementById('destination').value = place.name;
+  });
+}
+
+// โหลด Google Maps JS พร้อม callback
+(function loadMapsScript() {
+  const key = window._MAPS_KEY;
+  if (!key) return;   // ถ้าไม่มี key ก็ใช้ input เปล่าได้เลย
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&language=th&region=TH&callback=initAutocomplete`;
+  s.async = true;
+  s.defer = true;
+  document.head.appendChild(s);
+})();
+
+// ─── Time Selector ───────────────────────────────
 function selectTime(btn) {
   document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -374,7 +433,6 @@ function selectTime(btn) {
   const wrap = document.getElementById('custom-time-wrap');
   if (selectedTime === 'custom') {
     wrap.classList.add('show');
-    // ตั้ง default เป็นเวลาปัจจุบัน
     const now = new Date();
     document.getElementById('custom-time').value =
       `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -398,7 +456,7 @@ function getDepartureISO() {
   return now.toISOString();
 }
 
-// ─── Analyze ─────────────────────────────────
+// ─── Analyze ─────────────────────────────────────
 async function analyze() {
   const origin = document.getElementById('origin').value.trim();
   const dest   = document.getElementById('destination').value.trim();
@@ -411,21 +469,13 @@ async function analyze() {
   showLoading(true);
 
   try {
-    // รับ LINE UID ถ้า login แล้ว
     let uid = null;
     try { uid = liff.isLoggedIn() ? liff.getDecodedIDToken()?.sub : null; } catch {}
-
-    const body = {
-      origin,
-      destination: dest,
-      departure_iso: getDepartureISO(),
-      uid,
-    };
 
     const res = await fetch('/api/route-weather', {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify(body),
+      body   : JSON.stringify({ origin, destination: dest, departure_iso: getDepartureISO(), uid }),
     });
 
     if (!res.ok) {
@@ -444,18 +494,17 @@ async function analyze() {
   }
 }
 
-// ─── Render Result ────────────────────────────
+// ─── Render Result ────────────────────────────────
 function showResult(d) {
   document.getElementById('view-form').style.display = 'none';
   const rv = document.getElementById('result');
   rv.style.display = 'block';
 
-  // Header color
   const hdr = document.getElementById('res-header');
   hdr.className = 'result-header ' + (
-    d.risk_pct === 0            ? 'safe'
-    : d.max_intensity === 'light'    ? 'light'
-    : d.max_intensity === 'moderate' ? 'moderate'
+    d.risk_pct === 0                  ? 'safe'
+    : d.max_intensity === 'light'     ? 'light'
+    : d.max_intensity === 'moderate'  ? 'moderate'
     : 'heavy'
   );
 
@@ -467,12 +516,10 @@ function showResult(d) {
   document.getElementById('res-risk').textContent = d.risk_pct;
   document.getElementById('risk-fill').style.width = d.risk_pct + '%';
 
-  // Recommendation
   const rc = document.getElementById('rec-card');
   rc.className = 'rec-card ' + (d.risk_pct >= 75 ? 'danger' : d.risk_pct >= 40 ? 'warning' : '');
   document.getElementById('rec-text').textContent = d.recommendation;
 
-  // Alt departure
   const altEl = document.getElementById('alt-depart');
   if (d.best_alt_departure) {
     altEl.style.display = 'flex';
@@ -481,7 +528,6 @@ function showResult(d) {
     altEl.style.display = 'none';
   }
 
-  // Timeline
   const tl = document.getElementById('timeline');
   tl.innerHTML = '';
   d.waypoints.forEach(wp => {
@@ -498,14 +544,14 @@ function showResult(d) {
 }
 
 function headlineText(d) {
-  if (d.risk_pct === 0)            return 'ฟ้าใส ออกได้เลย ☀️';
-  if (d.risk_pct < 30)             return 'มีฝนเล็กน้อยบางช่วง';
-  if (d.max_intensity === 'light') return 'ฝนเล็กน้อยบางจุด';
-  if (d.max_intensity === 'moderate') return 'ฝนปานกลาง ระวังด้วยนะ';
+  if (d.risk_pct === 0)                return 'ฟ้าใส ออกได้เลย ☀️';
+  if (d.risk_pct < 30)                 return 'มีฝนเล็กน้อยบางช่วง';
+  if (d.max_intensity === 'light')     return 'ฝนเล็กน้อยบางจุด';
+  if (d.max_intensity === 'moderate')  return 'ฝนปานกลาง ระวังด้วยนะ';
   return 'ฝนหนัก ควรเลื่อนเวลา';
 }
 
-// ─── Send to LINE Chat ────────────────────────
+// ─── Send to LINE ─────────────────────────────────
 async function sendToChat() {
   if (!lastResult) return;
   const d = lastResult;
@@ -524,23 +570,22 @@ async function sendToChat() {
     '',
     `💡 ${d.recommendation}`,
     d.best_alt_departure ? `⏰ แนะนำออก ${d.best_alt_departure} แทน` : '',
-  ].filter(l => l !== undefined).join('\n').trim();
+  ].filter(Boolean).join('\n').trim();
 
   try {
     if (liff.isInClient()) {
       await liff.sendMessages([{ type: 'text', text: msg }]);
       liff.closeWindow();
     } else {
-      // dev/browser mode — copy to clipboard
       await navigator.clipboard.writeText(msg);
-      alert('คัดลอกผลลัพธ์แล้ว! (นอก LINE)');
+      alert('คัดลอกผลลัพธ์แล้ว!');
     }
   } catch (e) {
     alert('ไม่สามารถส่งข้อความได้: ' + e.message);
   }
 }
 
-// ─── UI Helpers ──────────────────────────────
+// ─── UI Helpers ──────────────────────────────────
 function showForm() {
   document.getElementById('view-form').style.display = 'block';
   document.getElementById('result').style.display = 'none';

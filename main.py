@@ -26,7 +26,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-LIFF_ID = os.getenv("LIFF_ID", "")
+LIFF_ID         = os.getenv("LIFF_ID", "")
+GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
 
 # ─────────────────────────────────────────────
@@ -57,6 +58,7 @@ async def liff_page():
     """Serve LIFF app with LIFF_ID injected"""
     html = (LIFF_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__LIFF_ID__", LIFF_ID)
+    html = html.replace("__MAPS_KEY__", GOOGLE_MAPS_KEY)
     return HTMLResponse(html)
 
 
