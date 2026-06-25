@@ -162,6 +162,34 @@ async def places_autocomplete(q: str = ""):
     ]
 
 
+@app.get("/api/geocode")
+async def geocode(place_id: str = ""):
+    """แปลง place_id → lat/lon"""
+    if not place_id:
+        raise HTTPException(status_code=422, detail="place_id required")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                "https://maps.googleapis.com/maps/api/place/details/json",
+                params={
+                    "place_id": place_id,
+                    "key"     : GOOGLE_MAPS_KEY,
+                    "fields"  : "geometry",
+                    "language": "th",
+                },
+            )
+        data = res.json()
+    except Exception as e:
+        logger.warning(f"Geocode error: {e}")
+        raise HTTPException(status_code=500, detail="ไม่สามารถ geocode ได้")
+
+    if data.get("status") != "OK":
+        raise HTTPException(status_code=404, detail="ไม่พบสถานที่นี้")
+
+    loc = data["result"]["geometry"]["location"]
+    return {"lat": loc["lat"], "lon": loc["lng"]}
+
+
 @app.get("/api/reverse-geocode")
 async def reverse_geocode(lat: float, lon: float):
     """แปลง GPS coordinates → ชื่อสถานที่ภาษาไทย"""
