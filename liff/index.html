@@ -270,6 +270,65 @@
       border:1.5px solid #E2E8F0; border-radius:12px;
       padding:12px; font-size:14px; cursor:pointer; margin-top:8px;
     }
+
+    /* ════ Saved Places ════ */
+    .saved-section { padding: 12px 16px 0; }
+    .saved-label {
+      font-size: 11px; font-weight: 600; color: #718096;
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+    }
+    .saved-chips {
+      display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
+    }
+    .saved-chips::-webkit-scrollbar { display: none; }
+    .saved-chip {
+      background: white; border: 1.5px solid #E2E8F0; border-radius: 20px;
+      padding: 6px 14px; font-size: 13px; font-weight: 500;
+      white-space: nowrap; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px; transition: all .15s;
+      color: #1A202C;
+    }
+    .saved-chip:active { background: #EBF4FF; border-color: #1565C0; }
+
+    /* Save bottom-sheet */
+    .save-sheet {
+      position: fixed; inset: 0; z-index: 99998;
+      background: rgba(0,0,0,.45); display: flex; align-items: flex-end;
+    }
+    .save-sheet-inner {
+      background: white; width: 100%; border-radius: 20px 20px 0 0;
+      padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    }
+    .save-sheet-title { font-size: 15px; font-weight: 600; color: #1A202C; margin-bottom: 14px; }
+    .save-sheet-addr  { font-size: 13px; color: #718096; margin-bottom: 16px; line-height: 1.4; }
+    .save-sheet-input {
+      width: 100%; border: 1.5px solid #E2E8F0; border-radius: 10px;
+      padding: 11px 14px; font-size: 15px; outline: none; color: #1A202C; margin-bottom: 12px;
+    }
+    .save-sheet-input:focus { border-color: #1565C0; }
+    .save-sheet-actions { display: flex; gap: 8px; }
+    .save-sheet-actions button {
+      flex: 1; padding: 13px; border-radius: 10px; font-size: 14px;
+      font-weight: 600; cursor: pointer; border: none;
+    }
+    .btn-save-ok  { background: #1565C0; color: white; }
+    .btn-save-del { background: #FFF5F5; color: #C53030; }
+    .btn-save-cancel { background: #F7FAFC; color: #718096; }
+
+    /* Chip use-as sheet */
+    .use-sheet { position: fixed; inset: 0; z-index: 99998; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; }
+    .use-sheet-inner { background: white; width: 100%; border-radius: 20px 20px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
+    .use-sheet-name { font-size: 16px; font-weight: 700; color: #1A202C; margin-bottom: 4px; }
+    .use-sheet-addr { font-size: 13px; color: #718096; margin-bottom: 16px; line-height: 1.4; }
+    .use-sheet-btns { display: flex; flex-direction: column; gap: 8px; }
+    .use-sheet-btns button {
+      width: 100%; padding: 13px; border-radius: 10px; font-size: 15px;
+      font-weight: 600; cursor: pointer; border: none; text-align: left; padding-left: 16px;
+    }
+    .btn-use-origin { background: #EBF4FF; color: #1565C0; }
+    .btn-use-dest   { background: #F0FFF4; color: #276749; }
+    .btn-use-del    { background: #FFF5F5; color: #C53030; }
+    .btn-use-cancel { background: #F7FAFC; color: #718096; }
   </style>
 </head>
 <body>
@@ -281,6 +340,12 @@
     <p>เช็คฝนตลอดเส้นทางก่อนออกเดินทาง</p>
   </div>
 
+  <!-- Saved Places chips -->
+  <div id="saved-section" class="saved-section" style="display:none">
+    <div class="saved-label">📌 สถานที่บันทึก</div>
+    <div class="saved-chips" id="saved-chips"></div>
+  </div>
+
   <div class="card">
     <label>ต้นทาง</label>
     <div class="input-wrap">
@@ -289,6 +354,7 @@
       <div class="ac-loading" id="loading-origin"></div>
       <button class="icon-btn" id="gps-origin"       onclick="detectGPS('origin')"      title="ตำแหน่งปัจจุบัน">🎯</button>
       <button class="icon-btn"                        onclick="openMapPicker('origin')"  title="เปิดแผนที่">🗺️</button>
+      <button class="icon-btn"                        onclick="openSaveSheet('origin')"  title="บันทึกสถานที่">⭐</button>
       <div class="ac-dropdown" id="dropdown-origin"></div>
     </div>
 
@@ -299,6 +365,7 @@
       <div class="ac-loading" id="loading-destination"></div>
       <button class="icon-btn" id="gps-destination"  onclick="detectGPS('destination')"      title="ตำแหน่งปัจจุบัน">🎯</button>
       <button class="icon-btn"                        onclick="openMapPicker('destination')"  title="เปิดแผนที่">🗺️</button>
+      <button class="icon-btn"                        onclick="openSaveSheet('destination')"  title="บันทึกสถานที่">⭐</button>
       <div class="ac-dropdown" id="dropdown-destination"></div>
     </div>
 
@@ -800,6 +867,106 @@ function showForm()   { document.getElementById('view-form').style.display='bloc
 function showLoading(on) { document.getElementById('loading').style.display=on?'block':'none'; document.querySelector('.btn-analyze').disabled=on; }
 function showError(msg)  { const e=document.getElementById('error-box'); e.textContent='❌ '+msg; e.style.display='block'; }
 function hideError()     { document.getElementById('error-box').style.display='none'; }
+
+// ── Saved Places ──────────────────────────────────
+const STORAGE_KEY = 'rainroute_saved_v1';
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveSaved(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+
+function renderSavedChips() {
+  const places = loadSaved();
+  const section = document.getElementById('saved-section');
+  const chips   = document.getElementById('saved-chips');
+  if (!places.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  chips.innerHTML = '';
+  places.forEach(p => {
+    const chip = document.createElement('button');
+    chip.className = 'saved-chip';
+    chip.innerHTML = `📌 ${p.name}`;
+    chip.onclick = () => openUseSheet(p);
+    chips.appendChild(chip);
+  });
+}
+
+// ── Save Sheet (บันทึกสถานที่) ─────────────────────
+function openSaveSheet(field) {
+  const addr = document.getElementById(field).value.trim();
+  if (!addr) { showError('กรอกที่อยู่ก่อนแล้วค่อยบันทึก'); return; }
+
+  // ตรวจว่ามีบันทึกอยู่แล้วไหม
+  const places   = loadSaved();
+  const existing = places.find(p => p.address === addr);
+
+  const sheet = document.createElement('div');
+  sheet.className = 'save-sheet';
+  sheet.innerHTML = `
+    <div class="save-sheet-inner">
+      <div class="save-sheet-title">${existing ? '✏️ แก้ไขสถานที่' : '⭐ บันทึกสถานที่'}</div>
+      <div class="save-sheet-addr">${addr.slice(0, 80)}${addr.length > 80 ? '…' : ''}</div>
+      <input class="save-sheet-input" id="_save_name" maxlength="20"
+        placeholder="ตั้งชื่อ เช่น บ้าน, ออฟฟิศ, ห้าง..."
+        value="${existing ? existing.name : ''}"/>
+      <div class="save-sheet-actions">
+        ${existing ? `<button class="btn-save-del" onclick="_doDelete('${existing.id}',this.closest('.save-sheet'))">🗑️ ลบ</button>` : ''}
+        <button class="btn-save-cancel" onclick="this.closest('.save-sheet').remove()">ยกเลิก</button>
+        <button class="btn-save-ok" onclick="_doSave('${addr.replace(/'/g,"\\'")}',this.closest('.save-sheet'),'${existing ? existing.id : ''}')">บันทึก ✓</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  setTimeout(() => document.getElementById('_save_name')?.focus(), 100);
+}
+
+function _doSave(addr, sheet, existingId) {
+  const name = document.getElementById('_save_name')?.value.trim();
+  if (!name) { document.getElementById('_save_name').style.borderColor='#FC8181'; return; }
+  let places = loadSaved();
+  if (existingId) {
+    places = places.map(p => p.id === existingId ? {...p, name, address: addr} : p);
+  } else {
+    places.push({ id: Date.now().toString(), name, address: addr });
+  }
+  saveSaved(places);
+  sheet.remove();
+  renderSavedChips();
+}
+
+function _doDelete(id, sheet) {
+  saveSaved(loadSaved().filter(p => p.id !== id));
+  sheet.remove();
+  renderSavedChips();
+}
+
+// ── Use Sheet (เลือกใช้เป็นต้นทาง/ปลายทาง) ──────
+function openUseSheet(place) {
+  const sheet = document.createElement('div');
+  sheet.className = 'use-sheet';
+  sheet.innerHTML = `
+    <div class="use-sheet-inner">
+      <div class="use-sheet-name">📌 ${place.name}</div>
+      <div class="use-sheet-addr">${place.address.slice(0,80)}${place.address.length>80?'…':''}</div>
+      <div class="use-sheet-btns">
+        <button class="btn-use-origin" onclick="_fillField('origin','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))">📍 ใช้เป็นต้นทาง</button>
+        <button class="btn-use-dest"   onclick="_fillField('destination','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))">🏁 ใช้เป็นปลายทาง</button>
+        <button class="btn-use-del"    onclick="_doDelete('${place.id}',this.closest('.use-sheet'))">🗑️ ลบสถานที่นี้</button>
+        <button class="btn-use-cancel" onclick="this.closest('.use-sheet').remove()">ยกเลิก</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+}
+
+function _fillField(field, addr, sheet) {
+  document.getElementById(field).value = addr;
+  sheet.remove();
+}
+
+// โหลด chips เมื่อเปิดหน้า
+renderSavedChips();
 </script>
 </body>
 </html>
