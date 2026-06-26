@@ -34,7 +34,7 @@
 
     /* ── Card ── */
     .card {
-      background: white; border-radius: 16px; padding: 20px;
+      background: white; border-radius: 4px; padding: 20px;
       margin: -12px 16px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
     }
     label {
@@ -46,7 +46,7 @@
     /* ── Input ── */
     .input-wrap {
       position: relative; display: flex; align-items: center;
-      border: 1.5px solid #E2E8F0; border-radius: 10px;
+      border: 1.5px solid #E2E8F0; border-radius: 4px;
       padding: 10px 12px; margin-bottom: 14px; transition: border-color .2s;
     }
     .input-wrap:focus-within { border-color: #1565C0; }
@@ -93,7 +93,7 @@
     /* dropdown */
     .ac-dropdown {
       display:none; position:absolute; top:calc(100% + 2px); left:0; right:0;
-      background:white; border:1.5px solid #E2E8F0; border-radius:10px;
+      background:white; border:1.5px solid #E2E8F0; border-radius:4px;
       box-shadow:0 4px 20px rgba(0,0,0,.12); z-index:998;
       overflow:hidden; max-height:220px; overflow-y:auto;
     }
@@ -111,7 +111,7 @@
     /* time grid */
     .time-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px; }
     .time-btn {
-      border:1.5px solid #E2E8F0; border-radius:10px; padding:10px;
+      border:1.5px solid #E2E8F0; border-radius:4px; padding:10px;
       text-align:center; font-size:14px; font-weight:500;
       color:#4A5568; background:white; cursor:pointer; transition:all .15s;
     }
@@ -121,7 +121,7 @@
     .custom-time-wrap { display:none; margin-top:8px; }
     .custom-time-wrap.show { display:block; }
     .custom-time-wrap input[type="time"] {
-      width:100%; border:1.5px solid #E2E8F0; border-radius:10px;
+      width:100%; border:1.5px solid #E2E8F0; border-radius:4px;
       padding:10px 12px; font-size:16px; outline:none;
     }
     .custom-time-wrap input[type="time"]:focus { border-color:#1565C0; }
@@ -129,7 +129,7 @@
     /* CTA */
     .btn-analyze {
       width:100%; background:linear-gradient(135deg,#1565C0,#1976D2);
-      color:white; border:none; border-radius:12px; padding:16px;
+      color:white; border:none; border-radius:4px; padding:16px;
       font-size:16px; font-weight:600; cursor:pointer;
       transition:opacity .2s; margin-top:4px;
     }
@@ -147,7 +147,7 @@
     /* error */
     #error-box {
       display:none; background:#FFF5F5; border:1.5px solid #FC8181;
-      border-radius:10px; padding:14px; margin:16px; font-size:14px; color:#C53030;
+      border-radius:4px; padding:14px; margin:16px; font-size:14px; color:#C53030;
     }
 
     /* ════════════ MAP MODAL ════════════ */
@@ -163,11 +163,11 @@
     }
     .map-close-btn {
       background:rgba(255,255,255,.2); border:none; color:white;
-      border-radius:8px; padding:7px 12px; font-size:14px; cursor:pointer; white-space:nowrap;
+      border-radius:4px; padding:7px 12px; font-size:14px; cursor:pointer; white-space:nowrap;
     }
     .map-topbar-title { flex:1; font-size:15px; font-weight:600; text-align:center; }
     .map-ok-btn {
-      background:white; border:none; color:#1565C0; border-radius:8px;
+      background:white; border:none; color:#1565C0; border-radius:4px;
       padding:7px 14px; font-size:14px; font-weight:700; cursor:pointer;
       transition:opacity .15s; white-space:nowrap;
     }
@@ -183,13 +183,13 @@
     /* Nominatim search inside map modal */
     .map-search-input {
       width:100%; padding:10px 14px; font-size:15px;
-      border:1.5px solid #E2E8F0; border-radius:10px; outline:none;
+      border:1.5px solid #E2E8F0; border-radius:4px; outline:none;
       color:#1A202C; background:white;
     }
     .map-search-input:focus { border-color:#1565C0; }
     .map-suggest-box {
       display:none; position:absolute; left:16px; right:16px; top:calc(100% - 10px);
-      background:white; border:1.5px solid #E2E8F0; border-radius:10px;
+      background:white; border:1.5px solid #E2E8F0; border-radius:4px;
       box-shadow:0 4px 20px rgba(0,0,0,.12); z-index:10000;
       overflow:hidden; max-height:250px; overflow-y:auto;
     }
@@ -214,7 +214,7 @@
     }
     .map-my-loc-btn {
       margin-top:8px; background:none; border:1.5px solid #1565C0;
-      color:#1565C0; border-radius:8px; padding:7px 14px;
+      color:#1565C0; border-radius:4px; padding:7px 14px;
       font-size:13px; font-weight:500; cursor:pointer;
     }
     .map-my-loc-btn:active { background:#EBF4FF; }
@@ -222,7 +222,7 @@
     /* ════════════ RESULT ════════════ */
     #result { display:none; padding:0 16px 24px; }
 
-    .result-header { border-radius:16px; padding:20px; color:white; margin-bottom:12px; }
+    .result-header { border-radius:4px; padding:20px; color:white; margin-bottom:12px; }
     .result-header.safe     { background:linear-gradient(135deg,#2E7D32,#388E3C); }
     .result-header.light    { background:linear-gradient(135deg,#1565C0,#1976D2); }
     .result-header.moderate { background:linear-gradient(135deg,#E65100,#F57C00); }
@@ -234,8 +234,8 @@
 
     .risk-bar-wrap { margin:12px 0; }
     .risk-label { font-size:12px; opacity:.85; margin-bottom:6px; }
-    .risk-bar { background:rgba(255,255,255,.25); border-radius:99px; height:8px; }
-    .risk-fill { background:white; border-radius:99px; height:8px; transition:width .6s ease; }
+    .risk-bar { background:rgba(255,255,255,.25); border-radius:4px; height:8px; }
+    .risk-fill { background:white; border-radius:4px; height:8px; transition:width .6s ease; }
 
     .section-title {
       font-size:13px; font-weight:600; color:#718096;
@@ -274,21 +274,21 @@
     .rec-card .rec-text { font-size:14px; color:#1A202C; line-height:1.5; }
 
     .alt-depart {
-      background:#F0FFF4; border-radius:10px; padding:14px; margin-top:10px;
+      background:#F0FFF4; border-radius:4px; padding:14px; margin-top:10px;
       display:flex; align-items:center; gap:10px;
     }
     .alt-depart .alt-text { font-size:13px; color:#276749; }
     .alt-depart .alt-time { font-size:16px; font-weight:700; color:#276749; }
 
     .btn-send {
-      width:100%; background:#06C755; color:white; border:none; border-radius:12px;
+      width:100%; background:#06C755; color:white; border:none; border-radius:4px;
       padding:14px; font-size:15px; font-weight:600; cursor:pointer; margin-top:16px;
       display:flex; align-items:center; justify-content:center; gap:8px;
     }
     .btn-send:active { opacity:.85; }
     .btn-back {
       width:100%; background:transparent; color:#718096;
-      border:1.5px solid #E2E8F0; border-radius:12px;
+      border:1.5px solid #E2E8F0; border-radius:4px;
       padding:12px; font-size:14px; cursor:pointer; margin-top:8px;
     }
 
@@ -303,7 +303,7 @@
     }
     .saved-chips::-webkit-scrollbar { display: none; }
     .saved-chip {
-      background: white; border: 1.5px solid #E2E8F0; border-radius: 20px;
+      background: white; border: 1.5px solid #E2E8F0; border-radius: 4px;
       padding: 6px 14px; font-size: 13px; font-weight: 500;
       white-space: nowrap; cursor: pointer; flex-shrink: 0;
       display: flex; align-items: center; gap: 6px; transition: all .15s;
@@ -317,19 +317,19 @@
       background: rgba(0,0,0,.45); display: flex; align-items: flex-end;
     }
     .save-sheet-inner {
-      background: white; width: 100%; border-radius: 20px 20px 0 0;
+      background: white; width: 100%; border-radius: 4px 4px 0 0;
       padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
     }
     .save-sheet-title { font-size: 15px; font-weight: 600; color: #1A202C; margin-bottom: 14px; }
     .save-sheet-addr  { font-size: 13px; color: #718096; margin-bottom: 16px; line-height: 1.4; }
     .save-sheet-input {
-      width: 100%; border: 1.5px solid #E2E8F0; border-radius: 10px;
+      width: 100%; border: 1.5px solid #E2E8F0; border-radius: 4px;
       padding: 11px 14px; font-size: 15px; outline: none; color: #1A202C; margin-bottom: 12px;
     }
     .save-sheet-input:focus { border-color: #1565C0; }
     .save-sheet-actions { display: flex; gap: 8px; }
     .save-sheet-actions button {
-      flex: 1; padding: 13px; border-radius: 10px; font-size: 14px;
+      flex: 1; padding: 13px; border-radius: 4px; font-size: 14px;
       font-weight: 600; cursor: pointer; border: none;
     }
     .btn-save-ok  { background: #1565C0; color: white; }
@@ -338,12 +338,12 @@
 
     /* Chip use-as sheet */
     .use-sheet { position: fixed; inset: 0; z-index: 99998; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; }
-    .use-sheet-inner { background: white; width: 100%; border-radius: 20px 20px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
+    .use-sheet-inner { background: white; width: 100%; border-radius: 4px 4px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
     .use-sheet-name { font-size: 16px; font-weight: 700; color: #1A202C; margin-bottom: 4px; }
     .use-sheet-addr { font-size: 13px; color: #718096; margin-bottom: 16px; line-height: 1.4; }
     .use-sheet-btns { display: flex; flex-direction: column; gap: 8px; }
     .use-sheet-btns button {
-      width: 100%; padding: 13px; border-radius: 10px; font-size: 15px;
+      width: 100%; padding: 13px; border-radius: 4px; font-size: 15px;
       font-weight: 600; cursor: pointer; border: none; text-align: left; padding-left: 16px;
     }
     .btn-use-origin { background: #EBF4FF; color: #1565C0; }
@@ -883,7 +883,7 @@ function showMsgBox(msg, title) {
     <div style="background:white;width:100%;border-radius:20px 20px 0 0;padding:20px 20px 24px;">
       <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:#1A202C;">💬 ${title}</div>
       <textarea id="_msg_ta" readonly style="width:100%;height:160px;font-size:13px;line-height:1.6;
-        padding:10px 12px;border:1.5px solid #E2E8F0;border-radius:10px;resize:none;
+        padding:10px 12px;border:1.5px solid #E2E8F0;border-radius:4px;resize:none;
         font-family:-apple-system,sans-serif;color:#1A202C;background:#F7FAFC;">${msg}</textarea>
       <button id="_copy_btn" onclick="
         var ta=document.getElementById('_msg_ta');
@@ -892,7 +892,7 @@ function showMsgBox(msg, title) {
         this.textContent='✅ คัดลอกแล้ว!';
         setTimeout(()=>this.closest('div').parentElement.remove(),800);
       " style="width:100%;margin-top:12px;padding:14px;background:#1565C0;color:white;
-        border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">
+        border:none;border-radius:4px;font-size:15px;font-weight:600;cursor:pointer;">
         📋 คัดลอก
       </button>
     </div>`;
