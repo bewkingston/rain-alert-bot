@@ -1,0 +1,60 @@
+{
+  "size": {
+    "width": 2500,
+    "height": 810
+  },
+  "selected": true,
+  "name": "Rain Alert Menu",
+  "areas": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 625,
+        "height": 810
+      },
+      "action": {
+        "type": "message",
+        "text": "ฝน"
+      }
+    },
+    {
+      "bounds": {
+        "x": 625,
+        "y": 0,
+        "width": 625,
+        "height": 810
+      },
+      "action": {
+        "type": "postback",
+        "label": "Share Location",
+        "data": "action=share_location"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1250,
+        "y": 0,
+        "width": 625,
+        "height": 810
+      },
+      "action": {
+        "type": "message",
+        "text": "แจ้งเตือน"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1875,
+        "y": 0,
+        "width": 625,
+        "height": 810
+      },
+      "action": {
+        "type": "uri",
+        "label": "Open Rain Route",
+        "uri": "https://liff.line.me/LIFF_ID_HERE"
+      }
+    }
+  ]
+}

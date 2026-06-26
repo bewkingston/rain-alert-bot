@@ -2,19 +2,21 @@
 scheduler.py — Rain Alert Bot
 Auto-push แจ้งเตือนฝนล่วงหน้า 1 ชั่วโมง
 - ทุก 10 นาที ตรวจ Tomorrow.io สำหรับผู้ใช้ทุกคนที่มีตำแหน่ง
-- ส่ง push เฉพาะเมื่อจะมีฝนจริง และพ้น cooldown แล้ว
+- ส่ง push เฉพาะเมื่อจะมีฝนจริง และพ้น cooldown แล้ว และในช่วงเวลาที่อนุญาต
 """
 
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler(timezone="Asia/Bangkok")
 
+THAI_TZ = timezone(timedelta(hours=7))
+
 
 async def auto_rain_alert():
-    """ตรวจฝนล่วงหน้า 1 ชม. สำหรับผู้ใช้ทุกคน — ส่งเฉพาะที่จะตกจริง"""
+    """ตรวจฝนล่วงหน้า 1 ชม. สำหรับผู้ใช้ทุกคน — ส่งเฉพาะที่จะตกจริง และในช่วงเวลาที่อนุญาต"""
     from database import (SessionLocal, User, UserLocation, AlertLog,
                           get_minutes_since_last_alert)
     from weather import get_tomorrow_forecast
@@ -26,7 +28,16 @@ async def auto_rain_alert():
                  .filter(User.is_active == True, User.alert_enabled == True)
                  .all())
 
+        # ตรวจสอบเวลาไทยปัจจุบัน
+        thai_now = datetime.now(THAI_TZ)
+        current_hour = thai_now.hour
+
         for user in users:
+            # เช็คช่วงเวลาที่อนุญาต (ตามตั้งค่าของผู้ใช้)
+            if not (user.alert_start_hour <= current_hour < user.alert_end_hour):
+                logger.debug(f"Skip {user.line_user_id}: outside alert hours {user.alert_start_hour}:00-{user.alert_end_hour}:00 (now {current_hour}:00)")
+                continue
+
             loc = (db.query(UserLocation)
                    .filter(UserLocation.line_user_id == user.line_user_id,
                            UserLocation.is_primary == True)
@@ -45,7 +56,7 @@ async def auto_rain_alert():
             if not forecast or not forecast.will_rain:
                 continue
 
-            # แจ้งทุกระดับที่มีฝน (light ขึ้นไป ≥0.1 mm/hr)
+            # แจ้งทุกระดับที่มีฝน (light ขึ้นไป ≥0.5 mm/hr)
             if forecast.intensity == "none":
                 logger.debug(f"Skip {user.line_user_id}: intensity=none")
                 continue

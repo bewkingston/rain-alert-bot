@@ -120,6 +120,31 @@ async def _on_text(event: MessageEvent):
     if tl in ["ฝน", "ฝนตกไหม", "ฝนไหม", "ฝนตก", "rain", "🌧️", "🌧"]:
         await _reply_rain_now(event.reply_token, uid)
 
+    # ── ตั้งค่าเวลาแจ้งเตือน เช่น "แจ้งเตือน 6:00-22:00" ────────
+    elif any(kw in tl for kw in ["แจ้งเตือน", "เวลาแจ้ง", "ตั้งเวลา"]):
+        m = re.search(r'(\d{1,2})[.:](\d{2})\s*-\s*(\d{1,2})[.:](\d{2})', text)
+        if m:
+            start_h, start_m = int(m.group(1)), int(m.group(2))
+            end_h, end_m = int(m.group(3)), int(m.group(4))
+            if start_h >= end_h:
+                await _reply(event.reply_token, [TextMessage(text="เวลาเริ่มต้นต้องเร็วกว่าเวลาสิ้นสุดนะครับ 😅")])
+                return
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.line_user_id == uid).first()
+                if user:
+                    user.alert_start_hour = start_h
+                    user.alert_end_hour = end_h
+                    db.commit()
+                    await _reply(event.reply_token, [TextMessage(text=f"✅ ตั้งค่าแจ้งเตือนแล้ว\n⏰ {start_h:02d}:00 - {end_h:02d}:00 น.")])
+            finally:
+                db.close()
+        else:
+            await _reply(event.reply_token, [FlexMessage(
+                alt_text="ตั้งค่าเวลาแจ้งเตือน",
+                contents=_alert_time_flex(uid),
+            )])
+
     # ── เช็คฝนตามเวลา เช่น "ออกบ้าน 8.00" ────────
     elif _parse_time(tl) is not None and any(
         kw in tl for kw in ["ออก", "ไป", "กลับ", "เดินทาง", "เช้า", "เย็น", "ถึง"]
@@ -349,9 +374,12 @@ def _welcome_flex() -> FlexContainer:
             "type": "box", "layout": "vertical", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#1565C0",
-                 "cornerRadius": "4px",
+                 "cornerRadius": "4px", "height": "sm",
                  "action": {"type": "uri", "label": "🗺️ เปิด Rain Route",
                             "uri": liff_url}},
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "cornerRadius": "4px",
+                 "action": {"type": "message", "label": "⏰ ตั้งเวลาแจ้งเตือน", "text": "แจ้งเตือน"}},
             ],
         },
     })
@@ -508,6 +536,55 @@ def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
                 {"type": "button", "style": "primary", "height": "sm", "flex": 1,
                  "color": "#1565C0", "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
+            ],
+        },
+    })
+
+
+def _alert_time_flex(uid: str) -> FlexContainer:
+    """แสดงตัวเลือกเวลาแจ้งเตือน"""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.line_user_id == uid).first()
+        start_h = user.alert_start_hour if user else 6
+        end_h = user.alert_end_hour if user else 22
+    finally:
+        db.close()
+
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#1565C0", "paddingAll": "16px",
+            "contents": [
+                {"type": "text", "text": "⏰ เวลาแจ้งเตือน",
+                 "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"ตอนนี้: {start_h:02d}:00 - {end_h:02d}:00 น.",
+                 "color": "#BBDEFB", "size": "sm", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "paddingAll": "16px",
+            "contents": [
+                {"type": "text",
+                 "text": "เช่น: แจ้งเตือน 6:00-22:00",
+                 "size": "xs", "color": "#999999"},
+                {"type": "box", "layout": "vertical", "spacing": "sm",
+                 "contents": [
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌅 6:00 - 22:00 น.", "text": "แจ้งเตือน 6:00-22:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌄 7:00 - 21:00 น.", "text": "แจ้งเตือน 7:00-21:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "💼 8:00 - 20:00 น.", "text": "แจ้งเตือน 8:00-20:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌙 ตลอด 24 ชม.", "text": "แจ้งเตือน 0:00-23:59"}},
+                ]},
             ],
         },
     })
