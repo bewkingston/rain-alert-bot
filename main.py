@@ -72,6 +72,10 @@ class RouteRequest(BaseModel):
     destination:   str
     departure_iso: str          # ISO 8601 datetime string
     uid:           str | None = None  # LINE user ID (optional — for future push)
+    origin_lat:    float | None = None
+    origin_lon:    float | None = None
+    dest_lat:      float | None = None
+    dest_lon:      float | None = None
 
 
 @app.post("/api/route-weather")
@@ -84,7 +88,11 @@ async def route_weather(req: RouteRequest):
         raise HTTPException(status_code=422, detail="departure_iso format ไม่ถูกต้อง")
 
     try:
-        result = await analyze_route(req.origin, req.destination, departure_dt)
+        result = await analyze_route(
+            req.origin, req.destination, departure_dt,
+            origin_lat=req.origin_lat, origin_lon=req.origin_lon,
+            dest_lat=req.dest_lat, dest_lon=req.dest_lon,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except RuntimeError as e:
