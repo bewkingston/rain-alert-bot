@@ -16,7 +16,7 @@ from linebot.v3 import WebhookParser
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     AsyncApiClient, AsyncMessagingApi, Configuration,
-    ReplyMessageRequest,
+    ReplyMessageRequest, PushMessageRequest,
     TextMessage, FlexMessage, FlexContainer,
 )
 from linebot.v3.webhooks import (
@@ -212,6 +212,77 @@ async def _reply(reply_token: str, messages: list):
         await AsyncMessagingApi(api_client).reply_message(
             ReplyMessageRequest(reply_token=reply_token, messages=messages)
         )
+
+
+async def push_rain_alert(uid: str, forecast, loc_label: str = "ตำแหน่งของคุณ"):
+    """Push แจ้งเตือนฝนล่วงหน้า 1 ชม. — เรียกจาก scheduler"""
+    rec = build_recommendation(forecast)
+    mins = forecast.minutes_to_rain
+    mins_text = (
+        "กำลังตกอยู่" if mins == 0
+        else f"อีก {mins} นาที" if mins is not None
+        else "ใน 1-2 ชั่วโมง"
+    )
+    alt = f"⚠️ {forecast.emoji} ฝนจะมา{mins_text} — {loc_label}"
+    async with AsyncApiClient(configuration) as api_client:
+        await AsyncMessagingApi(api_client).push_message(
+            PushMessageRequest(
+                to=uid,
+                messages=[FlexMessage(
+                    alt_text=alt,
+                    contents=_push_alert_flex(forecast, rec, loc_label, mins_text),
+                )],
+            )
+        )
+
+
+def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str) -> FlexContainer:
+    """Flex สำหรับ auto-push alert — แสดง badge 'แจ้งเตือนอัตโนมัติ'"""
+    color = {"none": "#2E7D32", "light": "#1565C0",
+             "moderate": "#E65100", "heavy": "#B71C1C",
+             "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
+    now_str = datetime.now(_THAI_TZ).strftime("%d/%m %H:%M น.")
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
+
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": color, "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "⚠️ แจ้งเตือนฝนล่วงหน้า",
+                 "color": "#FFFFFF99", "size": "xs", "weight": "bold"},
+                {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
+                 "color": "#FFFFFF", "weight": "bold", "size": "xxl", "margin": "sm"},
+                {"type": "text", "text": f"📍 {loc_label}  •  {now_str}",
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "⏱ ฝนมา", "color": "#888888",
+                     "size": "sm", "flex": 2},
+                    {"type": "text", "text": mins_text,
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
+                ]},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "text": f"💡 {rec}", "wrap": True,
+                 "color": "#333333", "size": "sm", "margin": "md"},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "horizontal", "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "🔄 ตรวจอีกครั้ง", "text": "ฝน"}},
+                {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                 "color": "#1565C0",
+                 "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
+            ],
+        },
+    })
 
 
 def _parse_time(text: str):
