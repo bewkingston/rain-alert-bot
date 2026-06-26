@@ -532,12 +532,14 @@ function setupAutocomplete(inputId, dropdownId, loadingId) {
 
   async function fetchSug(q) {
     try {
-      const res  = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`
-      );
+      const res  = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
       const raw  = await res.json();
       loadEl.style.display = 'none';
-      show(raw.map(d => ({ description: d.display_name })));
+      if (raw.length) { show(raw); return; }
+      // fallback → Nominatim ถ้า Google ไม่มีผล
+      const res2 = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`);
+      const raw2 = await res2.json();
+      show(raw2.map(d => ({ description: d.display_name })));
     } catch { loadEl.style.display='none'; hide(); }
   }
   function show(items) {
@@ -617,23 +619,39 @@ function initMap() {
     if (q.length < 2) { mapSuggestBox.style.display = 'none'; return; }
     nomTimer = setTimeout(async () => {
       try {
-        const res   = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`);
-        const items = await res.json();
+        // Google Places ก่อน → fallback Nominatim
+        let items = [];
+        const gr = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
+        const gd = await gr.json();
+        if (gd.length) {
+          // Google → geocode แต่ละ place_id เพื่อเอา lat/lon
+          items = gd.map(p => ({ display_name: p.description, place_id: p.place_id }));
+        } else {
+          const nr = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=th&format=json&limit=5&accept-language=th`);
+          const nd = await nr.json();
+          items = nd.map(p => ({ display_name: p.display_name, lat: p.lat, lon: p.lon }));
+        }
         if (!items.length) { mapSuggestBox.style.display = 'none'; return; }
         mapSuggestBox.innerHTML = '';
         items.forEach(item => {
           const div = document.createElement('div');
           div.className = 'map-suggest-item';
           div.textContent = '📍 ' + item.display_name;
-          div.addEventListener('click', () => {
-            const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
+          div.addEventListener('click', async () => {
+            mapSuggestBox.style.display = 'none';
+            mapSearchInput.value = '';
+            let lat, lng;
+            if (item.place_id) {
+              const geo = await fetch(`/api/geocode?place_id=${item.place_id}`).then(r=>r.json());
+              lat = geo.lat; lng = geo.lon;
+            } else {
+              lat = parseFloat(item.lat); lng = parseFloat(item.lon);
+            }
             mapInstance.setView([lat, lng], 16);
             dropPin([lat, lng]);
             mapSelectedAddr = item.display_name;
             document.getElementById('map-addr-preview').textContent = '📍 ' + item.display_name;
             document.getElementById('map-ok-btn').disabled = false;
-            mapSuggestBox.style.display = 'none';
-            mapSearchInput.value = '';
           });
           mapSuggestBox.appendChild(div);
         });
