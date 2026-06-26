@@ -372,9 +372,9 @@ def _help_flex() -> FlexContainer:
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                _how_row("location_on", "ส่ง location pin", "เช็คฝนที่ตำแหน่งนั้นทันที"),
-                _how_row("chat", "พิมพ์ 'ฝน'", "ฝนที่ตำแหน่งที่บันทึกไว้"),
-                _how_row("route", "Rain Route", "ดูฝนตลอดเส้นทาง (วางแผนเดินทาง)"),
+                _how_row("📍", "ส่ง location pin", "เช็คฝนที่ตำแหน่งนั้นทันที"),
+                _how_row("💬", "พิมพ์ 'ฝน'", "ฝนที่ตำแหน่งที่บันทึกไว้"),
+                _how_row("🗺️", "Rain Route", "ดูฝนตลอดเส้นทาง (วางแผนเดินทาง)"),
             ],
         },
         "footer": {
@@ -513,28 +513,12 @@ def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
     })
 
 
-_MS_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsrounded"
-
-def _ms_icon(name: str) -> dict:
-    """Material Symbols Rounded icon as LINE Flex image component"""
-    return {
-        "type": "image",
-        "url": f"{_MS_BASE}/{name}/default/24px.svg",
-        "size": "20px",
-        "aspectRatio": "1:1",
-        "aspectMode": "fit",
-        "flex": 0,
-    }
-
 def _how_row(icon: str, label: str, desc: str) -> dict:
-    # icon = Material Symbols name (e.g. "location_on") or emoji fallback
-    icon_el = _ms_icon(icon) if not icon.startswith(tuple("📍💬🗺️🌧️")) else \
-              {"type": "text", "text": icon, "size": "md", "flex": 0}
     return {
         "type": "box", "layout": "horizontal", "spacing": "md",
         "alignItems": "center",
         "contents": [
-            icon_el,
+            {"type": "text", "text": icon, "size": "md", "flex": 0},
             {"type": "box", "layout": "vertical", "flex": 1, "contents": [
                 {"type": "text", "text": label,
                  "size": "sm", "color": "#111111", "weight": "bold", "wrap": True},
