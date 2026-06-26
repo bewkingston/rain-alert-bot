@@ -329,7 +329,7 @@ def _welcome_flex() -> FlexContainer:
             "contents": [
                 {
                     "type": "box", "layout": "vertical",
-                    "backgroundColor": "#EBF4FF", "cornerRadius": "10px",
+                    "backgroundColor": "#EBF4FF", "cornerRadius": "4px",
                     "paddingAll": "14px",
                     "contents": [
                         {"type": "text", "text": "👆 แตะปุ่มด้านล่างครั้งเดียว",
