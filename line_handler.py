@@ -73,6 +73,7 @@ async def _on_follow(event: FollowEvent):
     await _reply(event.reply_token, [FlexMessage(
         alt_text="ยินดีต้อนรับสู่ Rain Alert 🌧️",
         contents=_welcome_flex(),
+        quick_reply=_location_quick_reply(),   # ← โผล่ขึ้นมาทันที แตะครั้งเดียวจบ
     )])
 
 
@@ -319,17 +320,28 @@ def _welcome_flex() -> FlexContainer:
             "contents": [
                 {"type": "text", "text": "🌧️ Rain Alert",
                  "color": "#FFFFFF", "weight": "bold", "size": "xxl"},
-                {"type": "text", "text": "เช็คฝนก่อนออกเดินทาง",
+                {"type": "text", "text": "แจ้งเตือนฝนอัตโนมัติ ก่อนตกจริง 1 ชั่วโมง",
                  "color": "#BBDEFB", "size": "sm", "margin": "sm"},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "lg",
             "contents": [
-                {"type": "text", "text": "วิธีใช้", "weight": "bold", "size": "md", "color": "#333333"},
-                _how_row("📍", "ส่ง location pin", "เห็นสภาพฝนทันที"),
-                _how_row("💬", "พิมพ์ 'ฝน'", "เช็คฝนที่ตำแหน่งที่บันทึกไว้"),
-                _how_row("⏰", "พิมพ์ 'ออกบ้าน 8.00'", "forecast ตามเวลาที่ระบุ"),
+                {
+                    "type": "box", "layout": "vertical",
+                    "backgroundColor": "#EBF4FF", "cornerRadius": "10px",
+                    "paddingAll": "14px",
+                    "contents": [
+                        {"type": "text", "text": "👆 แตะปุ่มด้านล่างครั้งเดียว",
+                         "weight": "bold", "size": "md", "color": "#1565C0"},
+                        {"type": "text",
+                         "text": "แชร์ตำแหน่งของคุณ แล้วระบบจะแจ้งเตือนฝนให้อัตโนมัติ ไม่ต้องทำอะไรอีกเลย",
+                         "size": "sm", "color": "#555555", "wrap": True, "margin": "sm"},
+                    ],
+                },
+                {"type": "separator"},
+                _how_row("🌧️", "แจ้งเตือนอัตโนมัติ", "ส่ง push ก่อนฝนตก 1 ชม."),
+                _how_row("💬", "พิมพ์ 'ฝน'", "เช็คฝนที่ตำแหน่งปัจจุบัน"),
                 _how_row("🗺️", "Rain Route", "ดูฝนตลอดเส้นทางขับรถ"),
             ],
         },
