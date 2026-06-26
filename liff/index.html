@@ -380,14 +380,31 @@ let mapTargetField   = '';
 let mapSelectedAddr  = '';
 let mapInitialised   = false;
 
-// ── LIFF + auto GPS ──────────────────────────────
+// ── LIFF + auto GPS + push location ─────────────
+let _lineUid = null;
+
 (async () => {
-  try { await liff.init({ liffId: LIFF_ID }); } catch (e) { console.warn('LIFF:', e.message); }
-  detectGPS('origin', true);
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    try { _lineUid = liff.getDecodedIDToken()?.sub || null; } catch {}
+  } catch (e) { console.warn('LIFF:', e.message); }
+  detectGPS('origin', true, true);   // silent=true, pushLocation=true
 })();
 
+// อัพเดท location ขึ้น server (fire-and-forget)
+async function pushLocationToServer(lat, lon, label) {
+  if (!_lineUid) return;
+  try {
+    await fetch('/api/update-location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: _lineUid, lat, lon, label }),
+    });
+  } catch (e) { console.warn('pushLocation:', e); }
+}
+
 // ── GPS ──────────────────────────────────────────
-async function detectGPS(field, silent = false) {
+async function detectGPS(field, silent = false, pushLocation = false) {
   if (!navigator.geolocation) { if (!silent) showError('GPS ไม่รองรับ'); return; }
   const btn   = document.getElementById(`gps-${field}`);
   const input = document.getElementById(field);
@@ -400,7 +417,15 @@ async function detectGPS(field, silent = false) {
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=th`
         );
         const data = await res.json();
-        input.value = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        const addr = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        input.value = addr;
+        // อัพเดท location ใน DB ทุกครั้งที่เปิดแอป
+        if (pushLocation) {
+          const short = data.address
+            ? (data.address.suburb || data.address.city_district || data.address.city || addr)
+            : addr;
+          pushLocationToServer(lat, lon, short);
+        }
       } catch { if (!silent) showError('แปลงพิกัดไม่ได้'); }
       finally { btn.classList.remove('locating'); input.placeholder = 'พิมพ์หรือเลือกจากแผนที่...'; }
     },

@@ -190,6 +190,29 @@ async def geocode(place_id: str = ""):
     return {"lat": loc["lat"], "lon": loc["lng"]}
 
 
+class UpdateLocationRequest(BaseModel):
+    uid: str
+    lat: float
+    lon: float
+    label: str = "ตำแหน่งปัจจุบัน"
+
+
+@app.post("/api/update-location")
+async def update_location(req: UpdateLocationRequest):
+    """LIFF เรียกทุกครั้งที่เปิดแอป — อัพเดท primary location ของ user"""
+    from database import SessionLocal, get_or_create_user, upsert_location
+    db = SessionLocal()
+    try:
+        get_or_create_user(db, req.uid)
+        upsert_location(db, req.uid, req.lat, req.lon, req.label)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"update-location error: {e}")
+        raise HTTPException(status_code=500, detail="บันทึกตำแหน่งไม่สำเร็จ")
+    finally:
+        db.close()
+
+
 @app.get("/api/reverse-geocode")
 async def reverse_geocode(lat: float, lon: float):
     """แปลง GPS coordinates → ชื่อสถานที่ภาษาไทย"""
