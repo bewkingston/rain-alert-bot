@@ -63,6 +63,10 @@ async def analyze_route(
     origin: str,
     destination: str,
     departure_dt: datetime,
+    origin_lat: float = None,
+    origin_lon: float = None,
+    dest_lat: float = None,
+    dest_lon: float = None,
 ) -> RouteWeatherResult:
     """
     วิเคราะห์ฝนตลอดเส้นทาง origin → destination
@@ -75,7 +79,7 @@ async def analyze_route(
     dep_thai = departure_dt.astimezone(THAI_TZ)
 
     # 1. ดึง route จาก Google Maps
-    steps = await _get_route_steps(origin, destination, dep_utc)
+    steps = await _get_route_steps(origin, destination, dep_utc, origin_lat, origin_lon, dest_lat, dest_lon)
     if not steps:
         raise RuntimeError("ไม่พบเส้นทาง กรุณาตรวจสอบชื่อสถานที่")
 
@@ -137,14 +141,15 @@ async def analyze_route(
 
 import re as _re
 
-async def _get_route_steps(origin: str, destination: str, dep_utc: datetime) -> list:
+async def _get_route_steps(origin: str, destination: str, dep_utc: datetime,
+                              origin_lat=None, origin_lon=None, dest_lat=None, dest_lon=None) -> list:
     """ลอง Google Directions ก่อน; ถ้าไม่ได้ใช้ Nominatim + OSRM"""
     if GMAPS_KEY:
         steps = await _google_directions(origin, destination, dep_utc)
         if steps:
             return steps
         logger.warning("Google Directions failed — switching to OSRM")
-    return await _osrm_route(origin, destination)
+    return await _osrm_route(origin, destination, origin_lat, origin_lon, dest_lat, dest_lon)
 
 
 async def _google_directions(origin: str, destination: str, dep_utc: datetime) -> list:
@@ -193,11 +198,18 @@ async def _nominatim_geocode(query: str) -> tuple:
     return float(data[0]["lat"]), float(data[0]["lon"])
 
 
-async def _osrm_route(origin: str, destination: str) -> list:
-    """Nominatim geocoding + OSRM driving route (ฟรี ไม่ต้อง billing)"""
+async def _osrm_route(origin: str, destination: str,
+                       orig_lat=None, orig_lon=None,
+                       dest_lat=None, dest_lon=None) -> list:
+    """เรียก Nominatim geocoding + OSRM driving route (ฟรี ไม่ต้อง billing)"""
     try:
-        orig_lat, orig_lon = await _nominatim_geocode(origin)
-        dest_lat, dest_lon = await _nominatim_geocode(destination)
+        if orig_lat is None or orig_lon is None:
+            orig_lat, orig_lon = await _nominatim_geocode(origin)
+        if dest_lat is None or dest_lon is None:
+            dest_lat, dest_lon = await _nominatim_geocode(destination)
+        # ตรวจว่าต้นทาง-ปลายทางอยู่ที่เดียวกันหรือใกล้มาก
+        if abs(orig_lat - dest_lat) < 0.001 and abs(orig_lon - dest_lon) < 0.001:
+            raise RuntimeError("ต้นทางและปลายทางอยู่ใกล้กันมาก กรุณาตรวจสอบชื่อสถานที่")
 
         async with httpx.AsyncClient(timeout=12) as client:
             resp = await client.get(
@@ -216,7 +228,7 @@ async def _osrm_route(origin: str, destination: str) -> list:
             for step in leg.get("steps", []):
                 loc = step["maneuver"]["location"]   # [lon, lat]
                 dur = int(step.get("duration", 0))
-                if dur < 10:
+                if dur < 5:
                     continue     # ตัด micro-steps ออก
                 steps.append({
                     "name"        : step.get("name") or "จุดระหว่างทาง",
