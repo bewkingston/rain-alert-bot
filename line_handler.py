@@ -363,10 +363,10 @@ def _help_flex() -> FlexContainer:
         "type": "bubble", "size": "mega",
         "header": {
             "type": "box", "layout": "vertical",
-            "backgroundColor": "#37474F", "paddingAll": "16px",
+            "paddingAll": "16px",
             "contents": [
                 {"type": "text", "text": "🌧️ วิธีใช้ Rain Alert",
-                 "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+                 "weight": "bold", "size": "lg"},
             ],
         },
         "body": {
