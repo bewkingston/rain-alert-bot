@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
+  <!-- Google Material Symbols Rounded -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,300,0,0"/>
+
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
   <style>
@@ -60,12 +63,27 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
 
+    /* Google Material Symbols */
+    .ms {
+      font-family: 'Material Symbols Rounded';
+      font-weight: normal; font-style: normal;
+      font-size: 20px; line-height: 1;
+      letter-spacing: normal; text-transform: none;
+      display: inline-block; white-space: nowrap; word-wrap: normal;
+      direction: ltr; -webkit-font-smoothing: antialiased;
+      vertical-align: middle;
+    }
+    .ms.sm  { font-size: 18px; }
+    .ms.lg  { font-size: 24px; }
+    .ms.fill { font-variation-settings: 'FILL' 1; }
+
     /* icon buttons */
     .icon-btn {
       background:none; border:none; cursor:pointer; padding:0 0 0 6px;
-      font-size:17px; flex-shrink:0; opacity:.55; transition:opacity .15s; line-height:1;
+      font-size:17px; flex-shrink:0; color:#A0AEC0; transition:color .15s; line-height:1;
+      display:flex; align-items:center;
     }
-    .icon-btn:active { opacity:1; }
+    .icon-btn:active { color:#1565C0; }
     .icon-btn.locating { animation:pulse 1s infinite; }
     @keyframes pulse { 0%,100%{opacity:.25} 50%{opacity:.9} }
 
@@ -342,30 +360,30 @@
 
   <!-- Saved Places chips -->
   <div id="saved-section" class="saved-section" style="display:none">
-    <div class="saved-label">📌 สถานที่บันทึก</div>
+    <div class="saved-label"><span class="ms sm" style="vertical-align:middle;margin-right:3px">push_pin</span>สถานที่บันทึก</div>
     <div class="saved-chips" id="saved-chips"></div>
   </div>
 
   <div class="card">
     <label>ต้นทาง</label>
     <div class="input-wrap">
-      <span class="icon">📍</span>
+      <span class="icon ms" style="color:#1565C0">location_on</span>
       <input id="origin" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-origin"></div>
-      <button class="icon-btn" id="gps-origin"       onclick="detectGPS('origin')"      title="ตำแหน่งปัจจุบัน">🎯</button>
-      <button class="icon-btn"                        onclick="openMapPicker('origin')"  title="เปิดแผนที่">🗺️</button>
-      <button class="icon-btn"                        onclick="openSaveSheet('origin')"  title="บันทึกสถานที่">⭐</button>
+      <button class="icon-btn" id="gps-origin"  onclick="detectGPS('origin')"     title="ตำแหน่งปัจจุบัน"><span class="ms">my_location</span></button>
+      <button class="icon-btn"                   onclick="openMapPicker('origin')" title="เปิดแผนที่"><span class="ms">map</span></button>
+      <button class="icon-btn"                   onclick="openSaveSheet('origin')" title="บันทึกสถานที่"><span class="ms">star</span></button>
       <div class="ac-dropdown" id="dropdown-origin"></div>
     </div>
 
     <label>ปลายทาง</label>
     <div class="input-wrap">
-      <span class="icon">🏁</span>
+      <span class="icon ms" style="color:#718096">flag</span>
       <input id="destination" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-destination"></div>
-      <button class="icon-btn" id="gps-destination"  onclick="detectGPS('destination')"      title="ตำแหน่งปัจจุบัน">🎯</button>
-      <button class="icon-btn"                        onclick="openMapPicker('destination')"  title="เปิดแผนที่">🗺️</button>
-      <button class="icon-btn"                        onclick="openSaveSheet('destination')"  title="บันทึกสถานที่">⭐</button>
+      <button class="icon-btn" id="gps-destination" onclick="detectGPS('destination')"     title="ตำแหน่งปัจจุบัน"><span class="ms">my_location</span></button>
+      <button class="icon-btn"                       onclick="openMapPicker('destination')" title="เปิดแผนที่"><span class="ms">map</span></button>
+      <button class="icon-btn"                       onclick="openSaveSheet('destination')" title="บันทึกสถานที่"><span class="ms">star</span></button>
       <div class="ac-dropdown" id="dropdown-destination"></div>
     </div>
 
@@ -380,7 +398,7 @@
       <input type="time" id="custom-time" />
     </div>
 
-    <button class="btn-analyze" onclick="analyze()">🔍 วิเคราะห์เส้นทาง</button>
+    <button class="btn-analyze" onclick="analyze()"><span class="ms" style="font-size:18px;vertical-align:middle;margin-right:6px">route</span>วิเคราะห์เส้นทาง</button>
   </div>
 
   <div id="loading"><div class="spinner"></div><p>กำลังวิเคราะห์เส้นทาง...</p></div>
@@ -390,9 +408,9 @@
 <!-- ─── Map Modal ─── -->
 <div id="map-modal">
   <div class="map-topbar">
-    <button class="map-close-btn" onclick="closeMapModal()">✕ ปิด</button>
+    <button class="map-close-btn" onclick="closeMapModal()"><span class="ms sm">close</span> ปิด</button>
     <div class="map-topbar-title">เลือกตำแหน่ง</div>
-    <button class="map-ok-btn" id="map-ok-btn" onclick="confirmMapLocation()" disabled>เลือก ✓</button>
+    <button class="map-ok-btn" id="map-ok-btn" onclick="confirmMapLocation()" disabled>เลือก <span class="ms sm">check</span></button>
   </div>
 
   <!-- Google PlaceAutocompleteElement goes here -->
@@ -402,7 +420,7 @@
 
   <div class="map-footer">
     <div id="map-addr-preview">📍 แตะบนแผนที่เพื่อเลือกตำแหน่ง</div>
-    <button class="map-my-loc-btn" onclick="centerMapToMyLocation()">🎯 ตำแหน่งของฉัน</button>
+    <button class="map-my-loc-btn" onclick="centerMapToMyLocation()"><span class="ms sm">my_location</span> ตำแหน่งของฉัน</button>
   </div>
 </div>
 
@@ -431,8 +449,8 @@
     </div>
     <p class="section-title">สภาพอากาศตลอดเส้นทาง</p>
     <ul class="timeline" id="timeline"></ul>
-    <button class="btn-send" onclick="sendToChat()"><span>💬</span> ส่งผลลัพธ์ไปที่แชต LINE</button>
-    <button class="btn-back" onclick="showForm()">← วิเคราะห์เส้นทางใหม่</button>
+    <button class="btn-send" onclick="sendToChat()"><span class="ms" style="font-size:18px">send</span> ส่งผลลัพธ์ไปที่แชต LINE</button>
+    <button class="btn-back" onclick="showForm()"><span class="ms sm">arrow_back</span> วิเคราะห์เส้นทางใหม่</button>
   </div>
 </div>
 
@@ -904,7 +922,7 @@ function renderSavedChips() {
   places.forEach(p => {
     const chip = document.createElement('button');
     chip.className = 'saved-chip';
-    chip.innerHTML = `📌 ${p.name}`;
+    chip.innerHTML = `<span class="ms sm fill" style="color:#1565C0;margin-right:4px">push_pin</span>${p.name}`;
     chip.onclick = () => openUseSheet(p);
     chips.appendChild(chip);
   });
@@ -923,15 +941,15 @@ function openSaveSheet(field) {
   sheet.className = 'save-sheet';
   sheet.innerHTML = `
     <div class="save-sheet-inner">
-      <div class="save-sheet-title">${existing ? '✏️ แก้ไขสถานที่' : '⭐ บันทึกสถานที่'}</div>
+      <div class="save-sheet-title"><span class="ms sm" style="vertical-align:middle;margin-right:4px">${existing ? 'edit' : 'star'}</span>${existing ? 'แก้ไขสถานที่' : 'บันทึกสถานที่'}</div>
       <div class="save-sheet-addr">${addr.slice(0, 80)}${addr.length > 80 ? '…' : ''}</div>
       <input class="save-sheet-input" id="_save_name" maxlength="20"
         placeholder="ตั้งชื่อ เช่น บ้าน, ออฟฟิศ, ห้าง..."
         value="${existing ? existing.name : ''}"/>
       <div class="save-sheet-actions">
-        ${existing ? `<button class="btn-save-del" onclick="_doDelete('${existing.id}',this.closest('.save-sheet'))">🗑️ ลบ</button>` : ''}
+        ${existing ? `<button class="btn-save-del" onclick="_doDelete('${existing.id}',this.closest('.save-sheet'))"><span class="ms sm">delete</span> ลบ</button>` : ''}
         <button class="btn-save-cancel" onclick="this.closest('.save-sheet').remove()">ยกเลิก</button>
-        <button class="btn-save-ok" onclick="_doSave('${addr.replace(/'/g,"\\'")}',this.closest('.save-sheet'),'${existing ? existing.id : ''}')">บันทึก ✓</button>
+        <button class="btn-save-ok" onclick="_doSave('${addr.replace(/'/g,"\\'")}',this.closest('.save-sheet'),'${existing ? existing.id : ''}')"><span class="ms sm">check</span> บันทึก</button>
       </div>
     </div>`;
   document.body.appendChild(sheet);
@@ -968,9 +986,9 @@ function openUseSheet(place) {
       <div class="use-sheet-name">📌 ${place.name}</div>
       <div class="use-sheet-addr">${place.address.slice(0,80)}${place.address.length>80?'…':''}</div>
       <div class="use-sheet-btns">
-        <button class="btn-use-origin" onclick="_fillField('origin','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))">📍 ใช้เป็นต้นทาง</button>
-        <button class="btn-use-dest"   onclick="_fillField('destination','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))">🏁 ใช้เป็นปลายทาง</button>
-        <button class="btn-use-del"    onclick="_doDelete('${place.id}',this.closest('.use-sheet'))">🗑️ ลบสถานที่นี้</button>
+        <button class="btn-use-origin" onclick="_fillField('origin','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))"><span class="ms sm">location_on</span> ใช้เป็นต้นทาง</button>
+        <button class="btn-use-dest"   onclick="_fillField('destination','${place.address.replace(/'/g,"\\'")}',this.closest('.use-sheet'))"><span class="ms sm">flag</span> ใช้เป็นปลายทาง</button>
+        <button class="btn-use-del"    onclick="_doDelete('${place.id}',this.closest('.use-sheet'))"><span class="ms sm">delete</span> ลบสถานที่นี้</button>
         <button class="btn-use-cancel" onclick="this.closest('.use-sheet').remove()">ยกเลิก</button>
       </div>
     </div>`;
