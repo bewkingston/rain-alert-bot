@@ -88,6 +88,15 @@
     }
     .icon-btn:active { color:#1565C0; }
     .icon-btn.locating { animation:pulse 1s infinite; }
+
+    /* clear button */
+    .clear-btn {
+      display:none; background:none; border:none; cursor:pointer;
+      padding:0 0 0 4px; color:#A0AEC0; line-height:1; flex-shrink:0;
+      align-items:center; transition:color .15s;
+    }
+    .clear-btn:active { color:#1A202C; }
+    .clear-btn.visible { display:flex; }
     @keyframes pulse { 0%,100%{opacity:.25} 50%{opacity:.9} }
 
     /* dropdown */
@@ -373,6 +382,7 @@
       <span class="icon ms" style="color:#1565C0">location_on</span>
       <input id="origin" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-origin"></div>
+      <button class="clear-btn" id="clear-origin" onclick="clearField('origin')" title="ล้าง"><span class="ms sm">close</span></button>
       <button class="icon-btn" id="gps-origin"  onclick="detectGPS('origin')"     title="ตำแหน่งปัจจุบัน"><span class="ms">my_location</span></button>
       <button class="icon-btn"                   onclick="openSaveSheet('origin')" title="บันทึกสถานที่"><span class="ms">star</span></button>
       <div class="ac-dropdown" id="dropdown-origin"></div>
@@ -383,6 +393,7 @@
       <span class="icon ms" style="color:#718096">flag</span>
       <input id="destination" type="text" placeholder="พิมพ์หรือเลือกจากแผนที่..." autocomplete="off" />
       <div class="ac-loading" id="loading-destination"></div>
+      <button class="clear-btn" id="clear-destination" onclick="clearField('destination')" title="ล้าง"><span class="ms sm">close</span></button>
       <button class="icon-btn" id="gps-destination" onclick="detectGPS('destination')"     title="ตำแหน่งปัจจุบัน"><span class="ms">my_location</span></button>
       <button class="icon-btn"                       onclick="openSaveSheet('destination')" title="บันทึกสถานที่"><span class="ms">star</span></button>
       <div class="ac-dropdown" id="dropdown-destination"></div>
@@ -489,6 +500,23 @@ async function pushLocationToServer(lat, lon, label) {
   } catch (e) { console.warn('pushLocation:', e); }
 }
 
+// ── Clear field ──────────────────────────────────
+function clearField(field) {
+  const inp = document.getElementById(field);
+  if (!inp) return;
+  inp.value = '';
+  inp.dataset.lat = '';
+  inp.dataset.lon = '';
+  updateClearBtn(field);
+  inp.focus();
+}
+function updateClearBtn(field) {
+  const inp = document.getElementById(field);
+  const btn = document.getElementById(`clear-${field}`);
+  if (!inp || !btn) return;
+  btn.classList.toggle('visible', inp.value.trim().length > 0);
+}
+
 // ── GPS ──────────────────────────────────────────
 async function detectGPS(field, silent = false, pushLocation = false) {
   if (!navigator.geolocation) { if (!silent) showError('GPS ไม่รองรับ'); return; }
@@ -505,6 +533,7 @@ async function detectGPS(field, silent = false, pushLocation = false) {
         const data = await res.json();
         const addr = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
         input.value = addr;
+        updateClearBtn(field);
         // อัพเดท location ใน DB ทุกครั้งที่เปิดแอป
         if (pushLocation) {
           const short = data.address
@@ -532,6 +561,7 @@ function setupAutocomplete(inputId, dropdownId, loadingId) {
 
   input.addEventListener('input', () => {
     clearTimeout(timer); active = -1;
+    updateClearBtn(field);
     const q = input.value.trim();
     if (q.length < 2) { hide(); return; }
     loadEl.style.display = 'block';
@@ -572,7 +602,7 @@ function setupAutocomplete(inputId, dropdownId, loadingId) {
         <div class="ac-item-main">${p[0]}</div>
         ${p.slice(1).join(',').trim() ? `<div class="ac-item-sub">${p.slice(1).join(',').trim()}</div>` : ''}
       </div>`;
-      d.addEventListener('mousedown', (e) => { e.preventDefault(); input.value=item.description; hide(); });
+      d.addEventListener('mousedown', (e) => { e.preventDefault(); input.value=item.description; updateClearBtn(field); hide(); });
       dropdown.appendChild(d);
     });
     dropdown.style.display = 'block'; active = -1;
