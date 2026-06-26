@@ -349,6 +349,7 @@ def _welcome_flex() -> FlexContainer:
             "type": "box", "layout": "vertical", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#1565C0",
+                 "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🗺️ เปิด Rain Route",
                             "uri": liff_url}},
             ],
@@ -380,6 +381,7 @@ def _help_flex() -> FlexContainer:
             "type": "box", "layout": "vertical",
             "contents": [
                 {"type": "button", "style": "primary", "color": "#1565C0",
+                 "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🗺️ เปิด Rain Route",
                             "uri": liff_url}},
             ],
@@ -447,9 +449,10 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "type": "box", "layout": "horizontal", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "cornerRadius": "4px",
                  "action": {"type": "message", "label": "🔄 ตรวจอีกครั้ง", "text": "ฝน"}},
                 {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                 "color": "#1565C0",
+                 "color": "#1565C0", "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
             ],
         },
@@ -500,9 +503,10 @@ def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
             "type": "box", "layout": "horizontal", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "cornerRadius": "4px",
                  "action": {"type": "message", "label": "🌧️ ฝนตอนนี้", "text": "ฝน"}},
                 {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                 "color": "#1565C0",
+                 "color": "#1565C0", "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
             ],
         },
