@@ -177,15 +177,15 @@ async def get_rain_forecast_at_time(lat: float, lon: float,
 
 def build_recommendation(forecast: RainForecast) -> str:
     if not forecast.will_rain:
-        return "ฟ้าใส ออกได้เลย ไม่มีข้ออ้างอยู่บ้านแล้วนะ ☀️"
+        return "ฟ้าใสเลย ออกได้เลยนะ ☀️"
     mins = forecast.minutes_to_rain
     if mins is None or mins == 0:
-        return "ฝนตกแล้ว บอกแล้วว่าเตรียมร่มไว้ 🏃"
+        return "ฝนตกแล้วนะ รีบหาที่หลบด้วย 🏃"
     if mins <= 10:
-        return f"อีก {mins} นาทีเท่านั้น จะรอให้เปียกอยู่หรือเปล่า ⚡"
+        return f"อีกแค่ {mins} นาทีนะ รีบหน่อยก็ดี ⚡"
     if mins <= 20:
-        return f"อีก {mins} นาที เอาร่มไปด้วยก็ได้ ไม่ยากเลย 🌂"
-    return f"ยังอีก {mins} นาที ยังมีเวลา แต่อย่าลืมร่มล่ะ ☂️"
+        return f"อีก {mins} นาทีนะ เอาร่มไปด้วยก็ดีนะ 🌂"
+    return f"ยังอีก {mins} นาทีอยู่นะ แต่เอาร่มไปด้วยก็ดี ☂️"
 
 
 def _no_rain(source: str) -> RainForecast:

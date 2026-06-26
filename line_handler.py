@@ -261,7 +261,7 @@ def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str) -> Flex
             "type": "box", "layout": "vertical",
             "backgroundColor": color, "paddingAll": "20px",
             "contents": [
-                {"type": "text", "text": "เฮ้ย ฝนจะมาแล้วนะ ☔",
+                {"type": "text", "text": "แค่อยากบอกว่าฝนจะมาแล้วนะ ☔",
                  "color": "#FFFFFF99", "size": "xs", "weight": "bold"},
                 {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
                  "color": "#FFFFFF", "weight": "bold", "size": "xxl", "margin": "sm"},
@@ -320,7 +320,7 @@ def _welcome_flex() -> FlexContainer:
             "contents": [
                 {"type": "text", "text": "🌧️ Rain Alert",
                  "color": "#FFFFFF", "weight": "bold", "size": "xxl"},
-                {"type": "text", "text": "ไม่อยากเปียกใช่ม่ะ 🌂",
+                {"type": "text", "text": "เดี๋ยวทักให้เองนะ ไม่ต้องห่วง 🌂",
                  "color": "#BBDEFB", "size": "sm", "margin": "sm"},
             ],
         },
@@ -332,17 +332,17 @@ def _welcome_flex() -> FlexContainer:
                     "backgroundColor": "#EBF4FF", "cornerRadius": "4px",
                     "paddingAll": "14px",
                     "contents": [
-                        {"type": "text", "text": "แป๊บเดียวจริงๆ อย่าขี้เกียจ 🙄",
+                        {"type": "text", "text": "เซ็ตแป๊บนึง แค่นั้นเอง",
                          "weight": "bold", "size": "md", "color": "#1565C0"},
                         {"type": "text",
-                         "text": "แชร์ location มาก่อน เดี๋ยวทักบอกเองเลย ไม่ต้องมานั่งเช็คเองหรอก",
+                         "text": "แชร์ location ให้ก่อนนะ เดี๋ยวดูแลให้เอง",
                          "size": "sm", "color": "#555555", "wrap": True, "margin": "sm"},
                     ],
                 },
                 {"type": "separator"},
-                _how_row("🌧️", "แจ้งก่อนเปียก", "ฝนจะมาทักบอกก่อน ไม่ต้องมาถามทุกวันหรอก"),
-                _how_row("💬", "พิมพ์ 'ฝน'", "ใจร้อนก็พิมพ์มาสิ ตอบได้เลย"),
-                _how_row("🗺️", "Rain Route", "ขับไปแล้วเจอฝน อย่ามาบอกว่าไม่รู้นะ"),
+                _how_row("🌧️", "แจ้งก่อนเปียก", "ถ้าฝนจะมา เดี๋ยวบอกเองนะ ไม่ต้องเป็นห่วง"),
+                _how_row("💬", "พิมพ์ 'ฝน'", "อยากเช็คเองก็พิมพ์มาได้เลย"),
+                _how_row("🗺️", "Rain Route", "เช็คก่อนออกเดินทางก็ดีนะ"),
             ],
         },
         "footer": {
@@ -365,16 +365,16 @@ def _help_flex() -> FlexContainer:
             "type": "box", "layout": "vertical",
             "paddingAll": "16px",
             "contents": [
-                {"type": "text", "text": "🌧️ ง่ายมาก อ่านหน่อยนะ",
+                {"type": "text", "text": "🌧️ ใช้ง่ายกว่าที่คิดนะ",
                  "weight": "bold", "size": "lg"},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                _how_row("📍", "ส่ง location", "ส่งมา เดี๋ยวบอกเองว่าตรงนั้นฝนตกไหม"),
-                _how_row("💬", "พิมพ์ 'ฝน'", "พิมพ์แค่คำเดียว เห็นมั้ยว่าง่ายแค่ไหน"),
-                _how_row("🗺️", "Rain Route", "วางแผนให้ ไม่มีข้ออ้างเปียกแล้วนะ"),
+                _how_row("📍", "ส่ง location", "ส่งมาได้เลย เดี๋ยวเช็คให้"),
+                _how_row("💬", "พิมพ์ 'ฝน'", "พิมพ์แค่คำเดียวก็รู้เลย"),
+                _how_row("🗺️", "Rain Route", "เช็คเส้นทางก่อนออกไปก็ดีนะ"),
             ],
         },
         "footer": {
@@ -396,10 +396,10 @@ def _no_location_flex() -> FlexContainer:
             "type": "box", "layout": "vertical", "spacing": "md",
             "paddingAll": "20px",
             "contents": [
-                {"type": "text", "text": "บอกก่อนสิว่าอยู่ที่ไหน 📍",
+                {"type": "text", "text": "ยังไม่รู้ว่าอยู่ที่ไหนเลยนะ 📍",
                  "weight": "bold", "size": "lg", "color": "#333333"},
                 {"type": "text",
-                 "text": "กด + เลือก 'ตำแหน่ง' ส่งมาก่อน แค่นั้นเอง แล้วค่อยพิมพ์ 'ฝน' ใหม่",
+                 "text": "กด + เลือก 'ตำแหน่ง' ส่งมาก่อนได้เลยนะ แล้วค่อยพิมพ์ 'ฝน' ใหม่",
                  "size": "sm", "color": "#555555", "wrap": True, "margin": "md"},
             ],
         },
@@ -412,9 +412,9 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
              "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
 
     mins_text = (
-        "ตกอยู่แล้ว ออกไปก็เปียกนะ ☔" if forecast.minutes_to_rain == 0
-        else f"อีกแค่ {forecast.minutes_to_rain} นาที เตรียมตัวด่วน" if forecast.minutes_to_rain is not None
-        else "ใกล้มาแล้ว"
+        "ตกอยู่เลยนะ ระวังด้วย ☔" if forecast.minutes_to_rain == 0
+        else f"อีก {forecast.minutes_to_rain} นาทีนะ เตรียมตัวหน่อยก็ดี" if forecast.minutes_to_rain is not None
+        else "อีกซักครู่นึง"
     )
     now_str = datetime.now(_THAI_TZ).strftime("%d/%m %H:%M น.")
 
@@ -466,16 +466,16 @@ def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
 
     if not forecast.will_rain:
         header = f"☀️ {time_str} น. — ฟ้าใส"
-        advice = "ฟ้าใส ออกได้เลย ไม่มีข้ออ้างอยู่บ้านแล้วนะ ☀️"
+        advice = "ฟ้าใสเลย ออกได้สบายๆ ☀️"
     elif forecast.intensity == "light":
         header = f"🌦️ {time_str} น. — ฝนนิดหน่อย"
-        advice = "ฝนนิดหน่อย เอาร่มไปด้วยก็แล้วกัน อย่าขี้เกียจ 🌂"
+        advice = "ฝนนิดหน่อยนะ เอาร่มไปด้วยก็ดี 🌂"
     elif forecast.intensity == "moderate":
-        header = f"🌧️ {time_str} น. — ฝนพอตัวเลย"
-        advice = "ฝนพอตัวเลย อย่าลืมเสื้อกันฝนล่ะ ไม่งั้นเปียกแน่ 🧥"
+        header = f"🌧️ {time_str} น. — ฝนพอสมควร"
+        advice = "ฝนพอสมควรเลยนะ เอาเสื้อกันฝนไปด้วยก็ดี 🧥"
     else:
-        header = f"⛈️ {time_str} น. — ฝนถล่ม"
-        advice = "ฝนถล่มเลย ออกไปก็เปียกแน่ รอซาก่อนดีกว่า ⛈️"
+        header = f"⛈️ {time_str} น. — ฝนหนักมาก"
+        advice = "ฝนหนักมากเลยนะ รอซาหน่อยก็ดีกว่า ⛈️"
 
     liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
 
