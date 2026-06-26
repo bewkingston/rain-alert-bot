@@ -55,10 +55,10 @@ async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast
         for i, iv in enumerate(intervals):
             mm = iv.get("values", {}).get("precipitationIntensity", 0)
             max_mm = max(max_mm, mm)
-            if mm >= 0.1 and minutes_to_rain is None:
+            if mm >= 0.5 and minutes_to_rain is None:
                 minutes_to_rain = i
 
-        if max_mm < 0.1:
+        if max_mm < 0.5:
             return _no_rain("tomorrow_io")
 
         level, level_th, emoji = _classify(max_mm)
@@ -194,7 +194,7 @@ def _no_rain(source: str) -> RainForecast:
 
 
 def _classify(mm: float) -> tuple:
-    if mm < 0.1:  return "none",     "ไม่มีฝน",    "☀️"
+    if mm < 0.5:  return "none",     "ไม่มีฝน",    "☀️"
     if mm < 2.5:  return "light",    "ฝนเล็กน้อย", "🌦️"
     if mm < 10.0: return "moderate", "ฝนปานกลาง",  "🌧️"
     if mm < 50.0: return "heavy",    "ฝนหนัก",      "⛈️"
