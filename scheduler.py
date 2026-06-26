@@ -45,9 +45,9 @@ async def auto_rain_alert():
             if not forecast or not forecast.will_rain:
                 continue
 
-            # แจ้งเฉพาะ moderate ขึ้นไป (≥2.5 mm/hr) — ฝนเล็กน้อยไม่แจ้ง
-            if forecast.intensity not in ("moderate", "heavy", "violent"):
-                logger.debug(f"Skip {user.line_user_id}: intensity={forecast.intensity} (too light)")
+            # แจ้งทุกระดับที่มีฝน (light ขึ้นไป ≥0.1 mm/hr)
+            if forecast.intensity == "none":
+                logger.debug(f"Skip {user.line_user_id}: intensity=none")
                 continue
 
             # มีฝน → ส่ง push
