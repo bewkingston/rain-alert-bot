@@ -476,6 +476,8 @@ let mapMarker        = null;
 let mapTargetField   = '';
 let mapSelectedAddr  = '';
 let mapInitialised   = false;
+let mapSelectedLat   = null;
+let mapSelectedLon   = null;
 
 // ── LIFF + auto GPS + push location ─────────────
 let _lineUid = null;
@@ -533,6 +535,8 @@ async function detectGPS(field, silent = false, pushLocation = false) {
         const data = await res.json();
         const addr = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
         input.value = addr;
+        input.dataset.lat = lat;
+        input.dataset.lon = lon;
         updateClearBtn(field);
         // อัพเดท location ใน DB ทุกครั้งที่เปิดแอป
         if (pushLocation) {
@@ -715,6 +719,7 @@ function initMap() {
   // ── Tap map → Nominatim reverse geocode ──
   mapInstance.on('click', async (e) => {
     const { lat, lng } = e.latlng;
+            mapSelectedLat = lat; mapSelectedLon = lng;
     dropPin([lat, lng]);
     document.getElementById('map-addr-preview').textContent = '⏳ กำลังหาที่อยู่...';
     document.getElementById('map-ok-btn').disabled = true;
@@ -761,6 +766,7 @@ function confirmMapLocation() {
 
 function closeMapModal() {
   document.getElementById('map-modal').style.display = 'none';
+  mapSelectedLat = null; mapSelectedLon = null;
 }
 
 // ── Time Selector ─────────────────────────────────
@@ -799,9 +805,17 @@ async function analyze() {
   try {
     let uid = null;
     try { uid = liff.isLoggedIn() ? liff.getDecodedIDToken()?.sub : null; } catch {}
+    const originEl = document.getElementById('origin');
+    const destEl = document.getElementById('destination');
     const res = await fetch('/api/route-weather', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ origin, destination:dest, departure_iso:getDepartureISO(), uid }),
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+            origin, destination:dest, departure_iso:getDepartureISO(), uid,
+            origin_lat: originEl.dataset.lat ? parseFloat(originEl.dataset.lat) : null,
+            origin_lon: originEl.dataset.lon ? parseFloat(originEl.dataset.lon) : null,
+            dest_lat: destEl.dataset.lat ? parseFloat(destEl.dataset.lat) : null,
+            dest_lon: destEl.dataset.lon ? parseFloat(destEl.dataset.lon) : null,
+        }),
     });
     if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.detail||`Error ${res.status}`); }
     lastResult = await res.json();
