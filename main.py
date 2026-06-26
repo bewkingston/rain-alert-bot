@@ -59,7 +59,7 @@ async def liff_page():
     """Serve LIFF app with LIFF_ID injected"""
     html = (LIFF_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__LIFF_ID__", LIFF_ID)
-    
+    html = html.replace("__MAPS_KEY__", GOOGLE_MAPS_KEY)
     return HTMLResponse(html)
 
 
@@ -242,6 +242,20 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+# ─────────────────────────────────────────────
+#  Admin: Setup Rich Menu (one-time)
+# ─────────────────────────────────────────────
+
+@app.post("/admin/setup-rich-menu")
+async def admin_setup_rich_menu():
+    """สร้าง LINE Rich Menu (เรียกครั้งเดียวหลัง deploy)"""
+    from create_rich_menu import setup
+    result = await setup()
+    if result.get("status") == "ok":
+        return result
+    raise HTTPException(status_code=500, detail=result.get("detail", "unknown error"))
 
 
 if __name__ == "__main__":
