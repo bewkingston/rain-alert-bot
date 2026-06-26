@@ -289,6 +289,26 @@ async def admin_setup_rich_menu():
     raise HTTPException(status_code=500, detail=result.get("detail", "unknown error"))
 
 
+@app.delete("/admin/delete-rich-menus")
+async def delete_rich_menus():
+    """ลบ Rich Menu ทั้งหมดออกจาก LINE Bot"""
+    import httpx
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient() as client:
+        # List all rich menus
+        r = await client.get("https://api.line.me/v2/bot/richmenu/list", headers=headers)
+        menus = r.json().get("richmenus", [])
+        deleted = []
+        for m in menus:
+            mid = m["richMenuId"]
+            dr = await client.delete(f"https://api.line.me/v2/bot/richmenu/{mid}", headers=headers)
+            deleted.append({"id": mid, "status": dr.status_code})
+        # Unlink from all users
+        await client.delete("https://api.line.me/v2/bot/users/all/richmenu", headers=headers)
+    return {"deleted": deleted, "count": len(deleted)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0",
