@@ -1,12 +1,16 @@
 """
-line_handler.py — Rain Alert Bot
-✅ FIX: ใช้ WebhookParser + async handlers แทน WebhookHandler (sync)
-       เพื่อให้ทำงานได้ถูกต้องใน FastAPI async context
+line_handler.py — Rain Alert Bot (pull-based)
+User มาเช็คเอง ไม่มี auto push
+  1. ส่ง location pin → เห็นฝนตอนนี้
+  2. พิมพ์ 'ฝน' → เห็นฝนที่ตำแหน่งที่บันทึกไว้
+  3. พิมพ์ 'ออกบ้าน 8.00' → forecast ณ เวลานั้น
+  4. กด Rain Route → เปิด LIFF วางแผนเส้นทาง
 """
 
 import os
+import re
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from linebot.v3 import WebhookParser
 from linebot.v3.exceptions import InvalidSignatureError
@@ -14,41 +18,42 @@ from linebot.v3.messaging import (
     AsyncApiClient, AsyncMessagingApi, Configuration,
     ReplyMessageRequest, PushMessageRequest,
     TextMessage, FlexMessage, FlexContainer,
+    QuickReply, QuickReplyItem, LocationAction,
 )
 from linebot.v3.webhooks import (
     MessageEvent, FollowEvent, UnfollowEvent,
-    LocationMessage, TextMessageContent,
+    LocationMessageContent, TextMessageContent,
 )
 
-from database import (
-    SessionLocal, get_or_create_user, upsert_location,
-    AlertLog, UserLocation, User, get_minutes_since_last_alert,
-)
-from weather import get_rain_forecast, build_recommendation
+from database import SessionLocal, get_or_create_user, upsert_location, User, UserLocation
+from weather import get_rain_forecast, get_rain_forecast_at_time, build_recommendation
 
 logger = logging.getLogger(__name__)
 
 LINE_CHANNEL_SECRET       = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+LIFF_ID                   = os.getenv("LIFF_ID", "")
+RENDER_URL                = os.getenv("RENDER_EXTERNAL_URL", "https://rain-alert-bot-a34m.onrender.com")
 
 parser        = WebhookParser(LINE_CHANNEL_SECRET)
 configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 
+_THAI_TZ = timezone(timedelta(hours=7))
+
 
 # ─────────────────────────────────────────────
-#  Entry point (เรียกจาก main.py)
+#  Entry point
 # ─────────────────────────────────────────────
 
 async def handle_events(body: str, signature: str):
-    """Parse และจัดการ events ทั้งหมดแบบ async"""
-    events = parser.parse(body, signature)   # raises InvalidSignatureError ถ้า signature ผิด
+    events = parser.parse(body, signature)
     for event in events:
         if isinstance(event, FollowEvent):
             await _on_follow(event)
         elif isinstance(event, UnfollowEvent):
             _on_unfollow(event)
         elif isinstance(event, MessageEvent):
-            if isinstance(event.message, LocationMessage):
+            if isinstance(event.message, LocationMessageContent):
                 await _on_location(event)
             elif isinstance(event.message, TextMessageContent):
                 await _on_text(event)
@@ -66,8 +71,9 @@ async def _on_follow(event: FollowEvent):
     finally:
         db.close()
     await _reply(event.reply_token, [FlexMessage(
-        alt_text="ยินดีต้อนรับสู่ Rain Alert 🌧️",
+        alt_text="เฮ้ยินดีต้อนรับ! รู้ก่อนเปียก 1 ชม. เลย 🌧️",
         contents=_welcome_flex(),
+        quick_reply=_location_quick_reply(),
     )])
 
 
@@ -84,13 +90,17 @@ def _on_unfollow(event: UnfollowEvent):
 
 
 async def _on_location(event: MessageEvent):
-    uid = event.source.user_id
-    lat = event.message.latitude
-    lon = event.message.longitude
+    """รับ location pin → บันทึก + แสดงฝนตอนนี้"""
+    uid   = event.source.user_id
+    lat   = event.message.latitude
+    lon   = event.message.longitude
+    # ใช้ address จาก LINE message เป็น label (ย่อให้สั้นลง)
+    addr  = getattr(event.message, "address", None) or "ตำแหน่งปัจจุบัน"
+    label = addr.split(",")[0].strip()[:64] if "," in addr else addr[:64]
     db = SessionLocal()
     try:
         get_or_create_user(db, uid)
-        upsert_location(db, uid, lat, lon)
+        upsert_location(db, uid, lat, lon, label)
     finally:
         db.close()
     forecast = await get_rain_forecast(lat, lon)
@@ -103,32 +113,58 @@ async def _on_location(event: MessageEvent):
 
 async def _on_text(event: MessageEvent):
     uid  = event.source.user_id
-    text = event.message.text.strip().lower()
+    text = event.message.text.strip()
+    tl   = text.lower()
 
-    if text in ["ฝน", "ฝนตกไหม", "ฝนไหม", "rain", "🌧️", "🌧"]:
-        await _reply_rain_status(event.reply_token, uid)
+    # ── เช็คฝนตอนนี้ ─────────────────────────────
+    if tl in ["ฝน", "ฝนตกไหม", "ฝนไหม", "ฝนตก", "rain", "🌧️", "🌧"]:
+        await _reply_rain_now(event.reply_token, uid)
 
-    elif text in ["เปิด", "เปิดแจ้งเตือน", "on"]:
-        _set_alert(uid, True)
-        await _reply(event.reply_token, [TextMessage(text="✅ เปิดการแจ้งเตือนฝนแล้วครับ")])
+    # ── ตั้งค่าเวลาแจ้งเตือน เช่น "แจ้งเตือน 6:00-22:00" ────────
+    elif any(kw in tl for kw in ["แจ้งเตือน", "เวลาแจ้ง", "ตั้งเวลา"]):
+        m = re.search(r'(\d{1,2})[.:](\d{2})\s*-\s*(\d{1,2})[.:](\d{2})', text)
+        if m:
+            start_h, start_m = int(m.group(1)), int(m.group(2))
+            end_h, end_m = int(m.group(3)), int(m.group(4))
+            if start_h >= end_h:
+                await _reply(event.reply_token, [TextMessage(text="🥹 เวลานี้แอบงงนิดนึง ลองใหม่อีกทีนะ")])
+                return
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.line_user_id == uid).first()
+                if user:
+                    user.alert_start_hour = start_h
+                    user.alert_end_hour = end_h
+                    db.commit()
+                    await _reply(event.reply_token, [TextMessage(text=f"🌂 เรียบร้อย! จากนี้ Forsi จะคอยดูฝนให้เธอเอง 💙\n⏰ {start_h:02d}:00 - {end_h:02d}:00 น.")])
+            finally:
+                db.close()
+        else:
+            await _reply(event.reply_token, [FlexMessage(
+                alt_text="ตั้งค่าเวลาแจ้งเตือน",
+                contents=_alert_time_flex(uid),
+            )])
 
-    elif text in ["ปิด", "ปิดแจ้งเตือน", "off"]:
-        _set_alert(uid, False)
-        await _reply(event.reply_token, [TextMessage(
-            text="🔕 ปิดการแจ้งเตือนแล้วครับ\nพิมพ์ 'เปิด' เมื่อต้องการเปิดอีกครั้ง"
+    # ── เช็คฝนตามเวลา เช่น "ออกบ้าน 8.00" ────────
+    elif _parse_time(tl) is not None and any(
+        kw in tl for kw in ["ออก", "ไป", "กลับ", "เดินทาง", "เช้า", "เย็น", "ถึง"]
+    ):
+        hour, minute = _parse_time(tl)
+        await _reply_rain_at_time(event.reply_token, uid, hour, minute)
+
+    # ── ทุกอย่างอื่น → help ───────────────────────
+    else:
+        await _reply(event.reply_token, [FlexMessage(
+            alt_text="วิธีใช้ Rain Alert 🌧️",
+            contents=_help_flex(),
         )])
 
-    else:
-        await _reply(event.reply_token, [TextMessage(text=(
-            "🌧️ Rain Alert — คำสั่งที่ใช้ได้\n\n"
-            "📍 ส่งตำแหน่ง → บันทึกและตรวจฝนทันที\n"
-            "ฝน / ฝนตกไหม → ตรวจสถานะฝนตอนนี้\n"
-            "เปิด → เปิดการแจ้งเตือนอัตโนมัติ\n"
-            "ปิด → ปิดการแจ้งเตือนอัตโนมัติ"
-        ))])
 
+# ─────────────────────────────────────────────
+#  Reply Builders
+# ─────────────────────────────────────────────
 
-async def _reply_rain_status(reply_token: str, uid: str):
+async def _reply_rain_now(reply_token: str, uid: str):
     db = SessionLocal()
     try:
         loc = (db.query(UserLocation)
@@ -138,8 +174,9 @@ async def _reply_rain_status(reply_token: str, uid: str):
         db.close()
 
     if not loc:
-        await _reply(reply_token, [TextMessage(
-            text="📍 ยังไม่มีตำแหน่งของคุณครับ\nกด ＋ → ตำแหน่ง → ส่งตำแหน่งปัจจุบันมาก่อนนะครับ"
+        await _reply(reply_token, [FlexMessage(
+            alt_text="ส่ง location ก่อนนะครับ",
+            contents=_no_location_flex(),
         )])
         return
 
@@ -151,48 +188,49 @@ async def _reply_rain_status(reply_token: str, uid: str):
     )])
 
 
-# ─────────────────────────────────────────────
-#  Push Alert (เรียกจาก scheduler)
-# ─────────────────────────────────────────────
-
-async def push_rain_alert(uid: str, lat: float, lon: float):
+async def _reply_rain_at_time(reply_token: str, uid: str, hour: int, minute: int):
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.line_user_id == uid).first()
-        if not user or not user.alert_enabled or not user.is_active:
-            return
-
-        if get_minutes_since_last_alert(db, uid) < user.alert_cooldown:
-            return
-
-        forecast = await get_rain_forecast(lat, lon)
-        if not forecast.will_rain:
-            return
-
-        rec     = build_recommendation(forecast)
-        alt     = f"{forecast.emoji} ฝนกำลังมา! — {forecast.intensity_th}"
-        flex    = _rain_flex(forecast, rec)
-
-        async with AsyncApiClient(configuration) as api_client:
-            await AsyncMessagingApi(api_client).push_message(PushMessageRequest(
-                to=uid,
-                messages=[FlexMessage(alt_text=alt, contents=flex)],
-            ))
-
-        db.add(AlertLog(
-            line_user_id=uid,
-            rain_intensity=forecast.intensity,
-            minutes_to_rain=forecast.minutes_to_rain,
-            source=forecast.source,
-            message_sent=alt,
-        ))
-        db.commit()
-        logger.info(f"✅ Pushed alert to {uid} | {forecast.intensity}")
-
-    except Exception as e:
-        logger.error(f"push_rain_alert error {uid}: {e}")
+        loc = (db.query(UserLocation)
+               .filter(UserLocation.line_user_id == uid, UserLocation.is_primary == True)
+               .first())
     finally:
         db.close()
+
+    time_str = f"{hour:02d}:{minute:02d}"
+
+    if not loc:
+        await _reply(reply_token, [FlexMessage(
+            alt_text="ส่ง location ก่อนนะครับ",
+            contents=_no_location_flex(),
+        )])
+        return
+
+    forecast = await get_rain_forecast_at_time(loc.latitude, loc.longitude, hour, minute)
+
+    if forecast.intensity == "out_of_range":
+        now = datetime.now(_THAI_TZ)
+        target = now.replace(hour=hour, minute=minute, second=0)
+        if target <= now:
+            target += timedelta(days=1)
+        mins = int((target - now).total_seconds() / 60)
+        await _reply(reply_token, [TextMessage(
+            text=f"⏰ {time_str} น. ยังอีก {mins//60} ชม. {mins%60} นาทีนะ\n\n"
+                 f"ดูล่วงหน้าได้แค่ 6 ชม. ค่อยเช็คใหม่ทีหลังได้เลย 😅"
+        )])
+        return
+
+    now = datetime.now(_THAI_TZ)
+    target = now.replace(hour=hour, minute=minute, second=0)
+    if target <= now:
+        target += timedelta(days=1)
+    mins = int((target - now).total_seconds() / 60)
+    time_label = f"อีก {mins//60} ชม. {mins%60} นาที" if mins >= 60 else f"อีก {mins} นาที"
+
+    await _reply(reply_token, [FlexMessage(
+        alt_text=f"{forecast.emoji} เวลา {time_str} น. — {forecast.intensity_th}",
+        contents=_time_rain_flex(forecast, time_str, time_label),
+    )])
 
 
 # ─────────────────────────────────────────────
@@ -206,32 +244,209 @@ async def _reply(reply_token: str, messages: list):
         )
 
 
-def _set_alert(uid: str, enabled: bool):
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.line_user_id == uid).first()
-        if user:
-            user.alert_enabled = enabled
-            db.commit()
-    finally:
-        db.close()
+def _location_quick_reply() -> QuickReply:
+    """Quick Reply ปุ่ม 'อัพเดทตำแหน่ง' — LINE เปิด location picker ให้เอง"""
+    return QuickReply(items=[
+        QuickReplyItem(action=LocationAction(label="📍 อัพเดทตำแหน่งของฉัน")),
+    ])
+
+
+async def push_rain_alert(uid: str, forecast, loc_label: str = "ตำแหน่งของคุณ"):
+    """Push แจ้งเตือนฝนล่วงหน้า 1 ชม. — เรียกจาก scheduler"""
+    rec = build_recommendation(forecast)
+    mins = forecast.minutes_to_rain
+    mins_text = (
+        "ตกอยู่เลย ☔" if mins == 0
+        else f"อีก {mins} นาทีมาแล้ว" if mins is not None
+        else "ซักพักนึง"
+    )
+    alt = f"☔ รีบมาบอก... ฝนกำลังจะมา"
+    flex_msg = FlexMessage(
+        alt_text=alt,
+        contents=_push_alert_flex(forecast, rec, loc_label, mins_text),
+        quick_reply=_location_quick_reply(),   # ← ปุ่มอัพเดทตำแหน่งใต้ alert
+    )
+    async with AsyncApiClient(configuration) as api_client:
+        await AsyncMessagingApi(api_client).push_message(
+            PushMessageRequest(to=uid, messages=[flex_msg])
+        )
+
+
+def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str) -> FlexContainer:
+    """Flex สำหรับ auto-push alert — แสดง badge 'แจ้งเตือนอัตโนมัติ'"""
+    color = {"none": "#2E7D32", "light": "#1565C0",
+             "moderate": "#E65100", "heavy": "#B71C1C",
+             "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
+    now_str = datetime.now(_THAI_TZ).strftime("%d/%m %H:%M น.")
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
+
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": color, "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": f"🌧️ ไม่อยากให้เธอเปียกฝนเลย... อีก {mins_text} ฝนจะตกแถว {loc_label} พกร่มไว้หน่อยน้า 🌂"",
+                 "color": "#FFFFFF99", "size": "xs", "weight": "bold"},
+                {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
+                 "color": "#FFFFFF", "weight": "bold", "size": "xxl", "margin": "sm"},
+                {"type": "text", "text": f"📍 {loc_label}  •  {now_str}",
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "⏱ ฝนมา", "color": "#888888",
+                     "size": "sm", "flex": 2},
+                    {"type": "text", "text": mins_text,
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
+                ]},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "text": f"💡 {rec}", "wrap": True,
+                 "color": "#333333", "size": "sm", "margin": "md"},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "horizontal", "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "👀 ขอเช็กอีกรอบ", "text": "ฝน"}},
+                {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                 "color": "#1565C0",
+                 "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
+            ],
+        },
+    })
+
+
+def _parse_time(text: str):
+    """แยกเวลาจากข้อความ '7.00' / '08:30' / '19.30' → (hour, minute) หรือ None"""
+    m = re.search(r'\b(\d{1,2})[.:](\d{2})\b', text)
+    if m:
+        h, mn = int(m.group(1)), int(m.group(2))
+        if 0 <= h <= 23 and 0 <= mn <= 59:
+            return (h, mn)
+    return None
 
 
 # ─────────────────────────────────────────────
-#  Flex Message Builders
+#  Flex Builders
 # ─────────────────────────────────────────────
+
+def _welcome_flex() -> FlexContainer:
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#1565C0", "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "🌧️ Rain Alert",
+                 "color": "#FFFFFF", "weight": "bold", "size": "xxl"},
+                {"type": "text", "text": "เดี๋ยวทักให้เองนะ ไม่ต้องห่วง 🌂",
+                 "color": "#BBDEFB", "size": "sm", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "lg",
+            "contents": [
+                {
+                    "type": "box", "layout": "vertical",
+                    "backgroundColor": "#EBF4FF", "cornerRadius": "4px",
+                    "paddingAll": "14px",
+                    "contents": [
+                        {"type": "text", "text": "เซ็ตแป๊บนึง แค่นั้นเอง",
+                         "weight": "bold", "size": "md", "color": "#1565C0"},
+                        {"type": "text",
+                         "text": "แชร์ location ให้ก่อนนะ เดี๋ยวดูแลให้เอง",
+                         "size": "sm", "color": "#555555", "wrap": True, "margin": "sm"},
+                    ],
+                },
+                {"type": "separator"},
+                _how_row("🌧️", "แจ้งก่อนเปียก", "ถ้าฝนจะมา เดี๋ยวบอกเองนะ ไม่ต้องเป็นห่วง"),
+                _how_row("💬", "พิมพ์ 'ฝน'", "อยากเช็คเองก็พิมพ์มาได้เลย"),
+                _how_row("🗺️", "Rain Route", "เช็คก่อนออกเดินทางก็ดีนะ"),
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": [
+                {"type": "button", "style": "primary", "color": "#1565C0",
+                 "cornerRadius": "4px", "height": "sm",
+                 "action": {"type": "uri", "label": "🗺️ เปิด Rain Route",
+                            "uri": liff_url}},
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "cornerRadius": "4px",
+                 "action": {"type": "message", "label": "⏰ อยากให้ Forsi สะกิดตอนไหน?", "text": "แจ้งเตือน"}},
+            ],
+        },
+    })
+
+
+def _help_flex() -> FlexContainer:
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "paddingAll": "16px",
+            "contents": [
+                {"type": "text", "text": "🌧️ ใช้ง่ายกว่าที่คิดนะ",
+                 "weight": "bold", "size": "lg"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                _how_row("📍", "ส่ง location", "ส่งมาได้เลย เดี๋ยวเช็คให้"),
+                _how_row("💬", "พิมพ์ 'ฝน'", "พิมพ์แค่คำเดียวก็รู้เลย"),
+                _how_row("🗺️", "Rain Route", "เช็คเส้นทางก่อนออกไปก็ดีนะ"),
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical",
+            "contents": [
+                {"type": "button", "style": "primary", "color": "#1565C0",
+                 "cornerRadius": "4px",
+                 "action": {"type": "uri", "label": "🗺️ เปิด Rain Route",
+                            "uri": liff_url}},
+            ],
+        },
+    })
+
+
+def _no_location_flex() -> FlexContainer:
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "kilo",
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "paddingAll": "20px",
+            "contents": [
+                {"type": "text", "text": "ยังไม่รู้ว่าอยู่ที่ไหนเลยนะ 📍",
+                 "weight": "bold", "size": "lg", "color": "#333333"},
+                {"type": "text",
+                 "text": "กด + เลือก 'ตำแหน่ง' ส่งมาก่อนได้เลยนะ แล้วค่อยพิมพ์ 'ฝน' ใหม่",
+                 "size": "sm", "color": "#555555", "wrap": True, "margin": "md"},
+            ],
+        },
+    })
+
 
 def _rain_flex(forecast, rec: str) -> FlexContainer:
-    color = {"none": "#4CAF50", "light": "#2196F3",
-             "moderate": "#FF9800", "heavy": "#F44336",
-             "violent": "#9C27B0"}.get(forecast.intensity, "#2196F3")
+    color = {"none": "#2E7D32", "light": "#1565C0",
+             "moderate": "#E65100", "heavy": "#B71C1C",
+             "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
 
     mins_text = (
-        "กำลังตกอยู่" if forecast.minutes_to_rain == 0
-        else f"ถึงใน {forecast.minutes_to_rain} นาที" if forecast.minutes_to_rain is not None
-        else "ใน 1-2 ชั่วโมง"
+        "ตกอยู่เลยนะ ระวังด้วย ☔" if forecast.minutes_to_rain == 0
+        else f"อีก {forecast.minutes_to_rain} นาทีนะ เตรียมตัวหน่อยก็ดี" if forecast.minutes_to_rain is not None
+        else "อีกซักครู่นึง"
     )
-    now_str = datetime.now(timezone.utc).strftime("%d/%m %H:%M UTC")
+    now_str = datetime.now(_THAI_TZ).strftime("%d/%m %H:%M น.")
+
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
 
     return FlexContainer.from_dict({
         "type": "bubble", "size": "mega",
@@ -240,73 +455,152 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "backgroundColor": color, "paddingAll": "20px",
             "contents": [
                 {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
-                 "color": "#FFFFFF", "weight": "bold", "size": "xl"},
-                {"type": "text", "text": now_str, "color": "#FFFFFF88", "size": "xs", "margin": "sm"},
+                 "color": "#FFFFFF", "weight": "bold", "size": "xxl"},
+                {"type": "text", "text": now_str,
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "⏱ เวลา", "color": "#888", "size": "sm", "flex": 2},
-                    {"type": "text", "text": mins_text, "color": "#111", "size": "sm", "weight": "bold", "flex": 3},
-                ]},
-                {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "💧 ปริมาณ", "color": "#888", "size": "sm", "flex": 2},
-                    {"type": "text", "text": f"{forecast.precipitation_mm} mm/hr",
-                     "color": "#111", "size": "sm", "weight": "bold", "flex": 3},
-                ]},
-                {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "📡 แหล่งข้อมูล", "color": "#888", "size": "sm", "flex": 2},
-                    {"type": "text", "text": forecast.source.replace("_", " ").title(),
-                     "color": "#111", "size": "sm", "flex": 3},
+                    {"type": "text", "text": "⏱ ฝนมา", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": mins_text,
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
                 ]},
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {rec}", "wrap": True,
-                 "color": "#333", "size": "sm", "margin": "md"},
+                 "color": "#333333", "size": "sm", "margin": "md"},
             ],
         },
         "footer": {
             "type": "box", "layout": "horizontal", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                 "action": {"type": "message", "label": "🔄 ตรวจอีกครั้ง", "text": "ฝนตกไหม"}},
-                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                 "action": {"type": "message", "label": "🔕 ปิดแจ้งเตือน", "text": "ปิด"}},
+                 "cornerRadius": "4px",
+                 "action": {"type": "message", "label": "🔄 เช็คอีกที", "text": "ฝน"}},
+                {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                 "color": "#1565C0", "cornerRadius": "4px",
+                 "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
             ],
         },
     })
 
 
-def _welcome_flex() -> FlexContainer:
+def _time_rain_flex(forecast, time_str: str, time_label: str) -> FlexContainer:
+    color = {"none": "#2E7D32", "light": "#1565C0",
+             "moderate": "#E65100", "heavy": "#B71C1C",
+             "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
+
+    if not forecast.will_rain:
+        header = f"☀️ {time_str} น. — ฟ้าใส"
+        advice = "ฟ้าใสเลย ออกได้สบายๆ ☀️"
+    elif forecast.intensity == "light":
+        header = f"🌦️ {time_str} น. — ฝนนิดหน่อย"
+        advice = "ฝนนิดหน่อยนะ เอาร่มไปด้วยก็ดี 🌂"
+    elif forecast.intensity == "moderate":
+        header = f"🌧️ {time_str} น. — ฝนพอสมควร"
+        advice = "ฝนพอสมควรเลยนะ เอาเสื้อกันฝนไปด้วยก็ดี 🧥"
+    else:
+        header = f"⛈️ {time_str} น. — ฝนหนักมาก"
+        advice = "ฝนหนักมากเลยนะ รอซาหน่อยก็ดีกว่า ⛈️"
+
+    liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
+
     return FlexContainer.from_dict({
         "type": "bubble", "size": "mega",
         "header": {
             "type": "box", "layout": "vertical",
-            "backgroundColor": "#1565C0", "paddingAll": "24px",
+            "backgroundColor": color, "paddingAll": "20px",
             "contents": [
-                {"type": "text", "text": "🌧️ Rain Alert", "color": "#FFFFFF",
-                 "weight": "bold", "size": "xxl"},
-                {"type": "text", "text": "แจ้งเตือนฝนล่วงหน้า แม่นยำ ทันเหตุการณ์",
-                 "color": "#BBDEFB", "size": "sm", "wrap": True, "margin": "sm"},
+                {"type": "text", "text": header,
+                 "color": "#FFFFFF", "weight": "bold", "size": "lg", "wrap": True},
+                {"type": "text", "text": f"({time_label})",
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                {"type": "text", "text": "วิธีเริ่มใช้งาน", "weight": "bold", "size": "md"},
-                {"type": "text", "wrap": True, "size": "sm", "color": "#444",
-                 "text": "1️⃣  กด 'ส่งตำแหน่งของฉัน' ด้านล่าง\n2️⃣  ระบบจะแจ้งเตือนอัตโนมัติเมื่อฝนกำลังมา\n3️⃣  พิมพ์ 'ฝน' เพื่อตรวจสถานะตลอดเวลา"},
-                {"type": "separator"},
-                {"type": "text", "text": "ข้อมูลจาก Tomorrow.io + กรมอุตุนิยมวิทยา",
-                 "color": "#888", "size": "xs", "align": "center"},
+                {"type": "separator", "margin": "md"},
+                {"type": "text", "text": f"💡 {advice}", "wrap": True,
+                 "color": "#333333", "size": "sm", "margin": "md"},
             ],
         },
         "footer": {
-            "type": "box", "layout": "vertical",
+            "type": "box", "layout": "horizontal", "spacing": "sm",
             "contents": [
-                {"type": "button", "style": "primary", "color": "#1565C0",
-                 "action": {"type": "location", "label": "📍 ส่งตำแหน่งของฉัน"}},
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "cornerRadius": "4px",
+                 "action": {"type": "message", "label": "☔ ฝนมาอะยัง?", "text": "ฝน"}},
+                {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                 "color": "#1565C0", "cornerRadius": "4px",
+                 "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
             ],
         },
     })
+
+
+def _alert_time_flex(uid: str) -> FlexContainer:
+    """แสดงตัวเลือกเวลาแจ้งเตือน"""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.line_user_id == uid).first()
+        start_h = user.alert_start_hour if user else 6
+        end_h = user.alert_end_hour if user else 22
+    finally:
+        db.close()
+
+    return FlexContainer.from_dict({
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "backgroundColor": "#1565C0", "paddingAll": "16px",
+            "contents": [
+                {"type": "text", "text": "🕒 ช่วงเวลาที่ Forsi จะคอยดูฝน",
+                 "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"ตอนนี้: {start_h:02d}:00 - {end_h:02d}:00 น.",
+                 "color": "#BBDEFB", "size": "sm", "margin": "sm"},
+            ],
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "paddingAll": "16px",
+            "contents": [
+                {"type": "text",
+                 "text": "เช่น: แจ้งเตือน 6:00-22:00",
+                 "size": "xs", "color": "#999999"},
+                {"type": "box", "layout": "vertical", "spacing": "sm",
+                 "contents": [
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌅 ตื่นจนเข้านอน", "text": "แจ้งเตือน 6:00-22:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌄 ช่วงออกไปข้างนอก", "text": "แจ้งเตือน 7:00-21:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "💼 ชั่วโมงทำงาน", "text": "แจ้งเตือน 8:00-20:00"}},
+                    {"type": "button", "style": "primary", "color": "#1565C0", "height": "sm",
+                     "cornerRadius": "4px",
+                     "action": {"type": "message", "label": "🌙 ดูให้ทั้งวันทั้งคืน", "text": "แจ้งเตือน 0:00-23:59"}},
+                ]},
+            ],
+        },
+    })
+
+
+def _how_row(icon: str, label: str, desc: str) -> dict:
+    return {
+        "type": "box", "layout": "horizontal", "spacing": "md",
+        "alignItems": "center",
+        "contents": [
+            {"type": "text", "text": icon, "size": "md", "flex": 0},
+            {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                {"type": "text", "text": label,
+                 "size": "sm", "color": "#111111", "weight": "bold", "wrap": True},
+                {"type": "text", "text": desc,
+                 "size": "xs", "color": "#888888", "wrap": True, "margin": "xs"},
+            ]},
+        ],
+    }
