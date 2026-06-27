@@ -478,7 +478,7 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "contents": [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                  "cornerRadius": "4px",
-                 "action": {"type": "message", "label": "🔄 เช็คอีกที", "text": "ฝน"}},
+                 "action": {"type": "message", "label": "🔍 ขอเช็กอีกรอบ", "text": "ฝน"}},
                 {"type": "button", "style": "primary", "height": "sm", "flex": 1,
                  "color": "#1565C0", "cornerRadius": "4px",
                  "action": {"type": "uri", "label": "🛣️ ทริปนี้รอดเปล่านะ", "uri": liff_url}},
