@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 LINE_CHANNEL_SECRET       = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
-LIFF_ID                   = os.getenv("LIFF_ID", "")
+LIFF_ID                   = os.getenv("LIFF_ID", "2010502960-lFLq5Es1")
 RENDER_URL                = os.getenv("RENDER_EXTERNAL_URL", "https://rain-alert-bot-a34m.onrender.com")
 
 parser        = WebhookParser(LINE_CHANNEL_SECRET)
