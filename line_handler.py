@@ -298,7 +298,7 @@ def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str) -> Flex
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "⏱ ฝนมา", "color": "#888888",
+                    {"type": "text", "text": "⛆ ฝนตกไหม", "color": "#888888",
                      "size": "sm", "flex": 2},
                     {"type": "text", "text": mins_text,
                      "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
@@ -312,7 +312,7 @@ def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str) -> Flex
             "type": "box", "layout": "horizontal", "spacing": "sm",
             "contents": [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                 "action": {"type": "message", "label": "🔄 ตรวจอีกครั้ง", "text": "ฝน"}},
+                 "action": {"type": "message", "label": "👀 ขอเช็กอีกรอบ", "text": "ฝน"}},
                 {"type": "button", "style": "primary", "height": "sm", "flex": 1,
                  "color": "#1565C0",
                  "action": {"type": "uri", "label": "🗺️ Rain Route", "uri": liff_url}},
@@ -464,7 +464,7 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "⏱ ฝนมา", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": "⛆ ฝนตกไหม", "color": "#888888", "size": "sm", "flex": 2},
                     {"type": "text", "text": mins_text,
                      "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
                 ]},
