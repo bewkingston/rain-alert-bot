@@ -63,3 +63,50 @@ if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)
 # Forsi Version - Deployed Sat Jun 27 09:17:00 UTC 2026
 # Last update: 1782553493
+
+# ═══════════════════════════════════════════════════════
+# 🗺️  AUTO GPS UPDATE ENDPOINT
+# ═══════════════════════════════════════════════════════
+
+@app.post("/api/update-location")
+async def update_location_api(request: dict):
+    """Auto-update user location from LIFF GPS tracking"""
+    try:
+        user_id = request.get("user_id")
+        latitude = request.get("latitude")
+        longitude = request.get("longitude")
+        
+        if not all([user_id, latitude, longitude]):
+            return {"status": "error", "message": "Missing fields"}
+        
+        db = SessionLocal()
+        try:
+            # Update or create user location
+            user_loc = db.query(UserLocation).filter(
+                UserLocation.line_user_id == user_id,
+                UserLocation.is_primary == True
+            ).first()
+            
+            if user_loc:
+                user_loc.latitude = latitude
+                user_loc.longitude = longitude
+                user_loc.updated_at = datetime.now(timezone.utc)
+            else:
+                user_loc = UserLocation(
+                    line_user_id=user_id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    label="Auto GPS",
+                    is_primary=True
+                )
+                db.add(user_loc)
+            
+            db.commit()
+            logger.info(f"✅ Auto-updated location for {user_id}: ({latitude}, {longitude})")
+            return {"status": "success", "message": "Location updated"}
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Location update error: {e}")
+        return {"status": "error", "message": str(e)}
+
