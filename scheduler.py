@@ -61,18 +61,20 @@ async def auto_rain_alert():
                 logger.debug(f"Skip {user.line_user_id}: intensity=none")
                 continue
 
-            # มีฝน → ส่ง push
+            # มีฝน → บันทึก log ก่อน แล้วส่ง push (เพื่อให้ได้ log.id สำหรับปุ่ม feedback)
             try:
-                await push_rain_alert(user.line_user_id, forecast, loc.label)
-                db.add(AlertLog(
+                log = AlertLog(
                     line_user_id    = user.line_user_id,
                     rain_intensity  = forecast.intensity,
                     minutes_to_rain = forecast.minutes_to_rain,
                     source          = forecast.source,
                     message_sent    = f"{forecast.emoji} {forecast.intensity_th}",
                     sent_at         = datetime.now(timezone.utc),
-                ))
+                )
+                db.add(log)
                 db.commit()
+                db.refresh(log)
+                await push_rain_alert(user.line_user_id, forecast, loc.label, alert_log_id=log.id)
                 logger.info(f"✅ Pushed alert → {user.line_user_id}: {forecast.intensity_th}")
             except Exception as e:
                 logger.error(f"Push failed for {user.line_user_id}: {e}")
