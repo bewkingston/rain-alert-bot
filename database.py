@@ -70,6 +70,8 @@ class AlertLog(Base):
     source          = Column(String(32))
     message_sent    = Column(Text)
     sent_at         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    user_feedback   = Column(String(16), nullable=True)   # 'rain' | 'no_rain'
+    feedback_at     = Column(DateTime, nullable=True)
 
 
 def init_db():
