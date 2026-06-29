@@ -19,7 +19,7 @@ async def auto_rain_alert():
     """ตรวจฝนล่วงหน้า 1 ชม. สำหรับผู้ใช้ทุกคน — ส่งเฉพาะที่จะตกจริง และในช่วงเวลาที่อนุญาต"""
     from database import (SessionLocal, User, UserLocation, AlertLog,
                           get_minutes_since_last_alert)
-    from weather import get_tomorrow_forecast
+    from weather import get_rain_forecast
     from line_handler import push_rain_alert
 
     db = SessionLocal()
@@ -52,7 +52,7 @@ async def auto_rain_alert():
                 continue
 
             # ตรวจฝนใน 60 นาทีข้างหน้า
-            forecast = await get_tomorrow_forecast(loc.latitude, loc.longitude)
+            forecast = await get_rain_forecast(loc.latitude, loc.longitude)
             if not forecast or not forecast.will_rain:
                 continue
 
