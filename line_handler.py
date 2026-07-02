@@ -159,6 +159,7 @@ async def _on_text(event: MessageEvent):
         await _reply(event.reply_token, [FlexMessage(
             alt_text="วิธีใช้ Rain Alert 🌧️",
             contents=_help_flex(),
+            quick_reply=_location_quick_reply(),
         )])
 
 
@@ -179,6 +180,7 @@ async def _reply_rain_now(reply_token: str, uid: str):
         await _reply(reply_token, [FlexMessage(
             alt_text="ส่ง location ก่อนนะครับ",
             contents=_no_location_flex(),
+            quick_reply=_location_quick_reply(),
         )])
         return
 
@@ -187,6 +189,7 @@ async def _reply_rain_now(reply_token: str, uid: str):
     await _reply(reply_token, [FlexMessage(
         alt_text=f"{forecast.emoji} {forecast.intensity_th}",
         contents=_rain_flex(forecast, rec, loc.label),
+        quick_reply=_location_quick_reply(),
     )])
 
 
@@ -205,6 +208,7 @@ async def _reply_rain_at_time(reply_token: str, uid: str, hour: int, minute: int
         await _reply(reply_token, [FlexMessage(
             alt_text="ส่ง location ก่อนนะครับ",
             contents=_no_location_flex(),
+            quick_reply=_location_quick_reply(),
         )])
         return
 
@@ -232,6 +236,7 @@ async def _reply_rain_at_time(reply_token: str, uid: str, hour: int, minute: int
     await _reply(reply_token, [FlexMessage(
         alt_text=f"{forecast.emoji} เวลา {time_str} น. — {forecast.intensity_th}",
         contents=_time_rain_flex(forecast, time_str, time_label),
+        quick_reply=_location_quick_reply(),
     )])
 
 
