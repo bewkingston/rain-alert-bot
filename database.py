@@ -28,7 +28,7 @@ class User(Base):
     display_name   = Column(String(128), nullable=True)
     is_active      = Column(Boolean, default=True)
     alert_enabled  = Column(Boolean, default=True)
-    alert_cooldown = Column(Integer, default=20)  # นาที (ลดจาก 30)
+    alert_cooldown = Column(Integer, default=5)  # นาที (ลดจาก 30)
     alert_start_hour = Column(Integer, default=6)   # เริ่มแจ้งเตือนตั้งแต่เวลาไหน (0-23)
     alert_end_hour   = Column(Integer, default=22)  # หยุดแจ้งเตือนเวลาไหน (0-23)
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -55,10 +55,10 @@ async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast
         for i, iv in enumerate(intervals):
             mm = iv.get("values", {}).get("precipitationIntensity", 0)
             max_mm = max(max_mm, mm)
-            if mm >= 0.5 and minutes_to_rain is None:
+            if mm >= 0.1 and minutes_to_rain is None:
                 minutes_to_rain = i
 
-        if max_mm < 0.5:
+        if max_mm < 0.1:
             return _no_rain("tomorrow_io")
 
         level, level_th, emoji = _classify(max_mm)
@@ -93,7 +93,7 @@ async def get_tmd_forecast(lat: float, lon: float) -> Optional[RainForecast]:
             float(f.get("data", {}).get("rain", {}).get("value", 0) or 0)
             for f in forecasts[:2]
         )
-        if max_mm < 0.5:
+        if max_mm < 0.1:
             return _no_rain("tmd")
 
         level, level_th, emoji = _classify(max_mm)
