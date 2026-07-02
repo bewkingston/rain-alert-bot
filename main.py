@@ -286,6 +286,25 @@ async def health():
 #  Admin: Setup Rich Menu (one-time)
 # ─────────────────────────────────────────────
 
+@app.get("/admin/feedback")
+async def list_feedback(limit: int = 50):
+    """ดู feedback ล่าสุดจากผู้ใช้ (เปิดในเบราว์เซอร์ได้เลย)"""
+    from database import SessionLocal, Feedback
+    db = SessionLocal()
+    try:
+        rows = (db.query(Feedback)
+                .order_by(Feedback.created_at.desc())
+                .limit(min(limit, 200)).all())
+        return {"count": len(rows), "feedback": [
+            {"id": r.id, "user": r.line_user_id[:12] + "...",
+             "message": r.message,
+             "at": r.created_at.isoformat() if r.created_at else None}
+            for r in rows
+        ]}
+    finally:
+        db.close()
+
+
 @app.post("/admin/setup-rich-menu")
 async def admin_setup_rich_menu():
     """สร้าง LINE Rich Menu (เรียกครั้งเดียวหลัง deploy)"""

@@ -74,6 +74,15 @@ class AlertLog(Base):
     feedback_at     = Column(DateTime, nullable=True)
 
 
+class Feedback(Base):
+    """ข้อเสนอแนะ/ติชมจากผู้ใช้ — พิมพ์ 'ติชม <ข้อความ>' ใน LINE"""
+    __tablename__ = "feedbacks"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    line_user_id = Column(String(64), nullable=False, index=True)
+    message      = Column(Text, nullable=False)
+    created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

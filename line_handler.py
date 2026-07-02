@@ -25,7 +25,7 @@ from linebot.v3.webhooks import (
     LocationMessageContent, TextMessageContent, PostbackEvent,
 )
 
-from database import SessionLocal, get_or_create_user, upsert_location, User, UserLocation, AlertLog
+from database import SessionLocal, get_or_create_user, upsert_location, User, UserLocation, AlertLog, Feedback
 from weather import get_rain_forecast, get_rain_forecast_at_time, build_recommendation
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,32 @@ async def _on_text(event: MessageEvent):
                 alt_text="ตั้งค่าเวลาแจ้งเตือน",
                 contents=_alert_time_flex(uid),
             )])
+
+    # ── ติชม / feedback ──────────────────────────
+    elif tl.startswith(("ติชม", "ฟีดแบค", "feedback", "แนะนำ")):
+        content = text
+        for p in ("ติชม", "ฟีดแบค", "feedback", "แนะนำ"):
+            if tl.startswith(p):
+                content = text[len(p):].strip(" :：,")
+                break
+        if not content:
+            await _reply(event.reply_token, [TextMessage(
+                text="💬 อยากบอกอะไรพิมพ์ต่อท้ายได้เลย เช่น\n\n"
+                     "ติชม แจ้งเตือนช้าไปนิดนึง\n"
+                     "ติชม อยากได้เมนูภาษาอังกฤษ\n\n"
+                     "อ่านทุกข้อความแน่นอน ขอบคุณนะ 🙏"
+            )])
+        else:
+            db = SessionLocal()
+            try:
+                db.add(Feedback(line_user_id=uid, message=content))
+                db.commit()
+            finally:
+                db.close()
+            await _reply(event.reply_token, [TextMessage(
+                text="🙏 ได้รับข้อความแล้ว ขอบคุณมากนะ\nทุกความเห็นช่วยให้บอทดีขึ้นจริงๆ 🌧️"
+            )])
+            await _forward_feedback_to_admin(uid, content)
 
     # ── เช็คฝนตามเวลา เช่น "ออกบ้าน 8.00" ────────
     elif _parse_time(tl) is not None and any(
@@ -285,6 +311,21 @@ async def _on_postback(event: PostbackEvent):
         finally:
             db.close()
         await _reply(event.reply_token, [TextMessage(text=msg)])
+
+
+async def _forward_feedback_to_admin(uid: str, content: str):
+    """ส่ง feedback เข้า LINE แอดมินทันที (ถ้าตั้ง ADMIN_LINE_USER_ID ไว้)"""
+    if not ADMIN_LINE_USER_ID:
+        return
+    try:
+        async with AsyncApiClient(configuration) as api_client:
+            await AsyncMessagingApi(api_client).push_message(
+                PushMessageRequest(to=ADMIN_LINE_USER_ID, messages=[TextMessage(
+                    text=f"💬 Feedback ใหม่\nจาก: {uid[:12]}...\n\n{content}"
+                )])
+            )
+    except Exception as e:
+        logger.error(f"forward feedback failed: {e}")
 
 
 async def push_rain_alert(uid: str, forecast, loc_label: str = "ตำแหน่งของคุณ", alert_log_id: int = None):
@@ -454,6 +495,7 @@ def _help_flex() -> FlexContainer:
                 _how_row("📍", "ส่ง location", "ส่งมาได้เลย เดี๋ยวเช็คให้"),
                 _how_row("💬", "พิมพ์ 'ฝน'", "พิมพ์แค่คำเดียวก็รู้เลย"),
                 _how_row("🗺️", "Rain Route", "เช็คเส้นทางก่อนออกไปก็ดีนะ"),
+                _how_row("💬", "พิมพ์ 'ติชม ...'", "บอกปัญหา/ไอเดียมาได้เลย อ่านทุกข้อความ"),
             ],
         },
         "footer": {
