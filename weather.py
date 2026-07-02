@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 TOMORROW_API_KEY = os.getenv("TOMORROW_IO_API_KEY", "")
 TMD_API_KEY      = os.getenv("TMD_API_KEY", "")
 
+# เกณฑ์ขั้นต่ำที่นับว่า "ฝนตกจริง" (mm/hr) — ต่ำกว่านี้ถือเป็น noise ของโมเดล
+RAIN_THRESHOLD = 0.5
+
 
 @dataclass
 class RainForecast:
@@ -25,6 +28,7 @@ class RainForecast:
     source:           str
     description:      str
     emoji:            str
+    rain_duration_min: Optional[int] = None  # ฝนตกนานประมาณกี่นาที (None = ไม่ทราบ/เกิน 60 นาที)
 
 
 async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast]:
@@ -50,21 +54,33 @@ async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast
         if not intervals:
             return _no_rain("tomorrow_io")
 
+        # ฝนต้อง ≥ RAIN_THRESHOLD ต่อเนื่องอย่างน้อย 2 นาทีถึงนับว่าตกจริง (ตัด noise)
+        vals = [iv.get("values", {}).get("precipitationIntensity", 0) or 0
+                for iv in intervals]
         minutes_to_rain = None
         max_mm = 0.0
-        for i, iv in enumerate(intervals):
-            mm = iv.get("values", {}).get("precipitationIntensity", 0)
+        for i, mm in enumerate(vals):
             max_mm = max(max_mm, mm)
-            if mm >= 0.5 and minutes_to_rain is None:
-                minutes_to_rain = i
+            if minutes_to_rain is None and mm >= RAIN_THRESHOLD:
+                nxt = vals[i + 1] if i + 1 < len(vals) else 0
+                if nxt >= RAIN_THRESHOLD:
+                    minutes_to_rain = i
 
-        if max_mm < 0.5:
+        if minutes_to_rain is None:
             return _no_rain("tomorrow_io")
+
+        # หาว่าฝนจะหยุดเมื่อไหร่ (ต่ำกว่าเกณฑ์ต่อเนื่อง 2 นาที = หยุด)
+        rain_duration = None
+        for j in range(minutes_to_rain + 1, len(vals)):
+            if vals[j] < RAIN_THRESHOLD and (j + 1 >= len(vals) or vals[j + 1] < RAIN_THRESHOLD):
+                rain_duration = j - minutes_to_rain
+                break
 
         level, level_th, emoji = _classify(max_mm)
         return RainForecast(True, minutes_to_rain, level, level_th,
                             round(max_mm, 2), "tomorrow_io",
-                            f"Tomorrow.io — {max_mm:.1f} mm/hr", emoji)
+                            f"Tomorrow.io — {max_mm:.1f} mm/hr", emoji,
+                            rain_duration_min=rain_duration)
     except Exception as e:
         logger.error(f"Tomorrow.io error: {e}")
         return None
@@ -93,7 +109,7 @@ async def get_tmd_forecast(lat: float, lon: float) -> Optional[RainForecast]:
             float(f.get("data", {}).get("rain", {}).get("value", 0) or 0)
             for f in forecasts[:2]
         )
-        if max_mm < 0.5:
+        if max_mm < 0.1:
             return _no_rain("tmd")
 
         level, level_th, emoji = _classify(max_mm)
@@ -105,11 +121,24 @@ async def get_tmd_forecast(lat: float, lon: float) -> Optional[RainForecast]:
         return None
 
 
+# Cache ต่อพิกัด (~100m) — ประหยัดโควตา Tomorrow.io (ฟรี 25 calls/ชม.)
+import time as _time
+_forecast_cache: dict = {}
+_CACHE_TTL = 240  # วินาที (สั้นกว่ารอบ scheduler 5 นาที)
+
+
 async def get_rain_forecast(lat: float, lon: float) -> RainForecast:
-    """Tomorrow.io เป็น primary, TMD เป็น fallback"""
-    return (await get_tomorrow_forecast(lat, lon)
-            or await get_tmd_forecast(lat, lon)
-            or _no_rain("none"))
+    """Tomorrow.io เป็น primary, TMD เป็น fallback (มี cache 4 นาที)"""
+    key = (round(lat, 3), round(lon, 3))
+    hit = _forecast_cache.get(key)
+    if hit and _time.time() - hit[0] < _CACHE_TTL:
+        return hit[1]
+    fc = (await get_tomorrow_forecast(lat, lon)
+          or await get_tmd_forecast(lat, lon))
+    if fc is None:
+        return _no_rain("none")  # ไม่ cache — ให้ลองใหม่รอบหน้า
+    _forecast_cache[key] = (_time.time(), fc)
+    return fc
 
 
 async def get_rain_forecast_at_time(lat: float, lon: float,
