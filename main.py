@@ -272,7 +272,14 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    # memory RSS (MB) — เฝ้าปัญหา OOM 512MB บน Render Starter
+    try:
+        import resource
+        mem_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)  # Linux: KB → MB
+    except Exception:
+        mem_mb = None
+    from weather import get_weather_stats
+    return {"status": "healthy", "mem_mb": mem_mb, "weather_1h": get_weather_stats()}
 
 
 # ─────────────────────────────────────────────

@@ -17,6 +17,21 @@ TMD_API_KEY      = os.getenv("TMD_API_KEY", "")
 # เกณฑ์ขั้นต่ำที่นับว่า "ฝนตกจริง" (mm/hr) — ต่ำกว่านี้ถือเป็น noise ของโมเดล
 RAIN_THRESHOLD = 0.5
 
+# ── ตัววัดโควตา Tomorrow.io (ฟรี 25 calls/ชม.) ──────────────────
+import time as _t
+_stats = {"tio_calls": [], "tio_fails": [], "tmd_fallbacks": [], "quota_429": []}
+
+def _mark(key: str):
+    now = _t.time()
+    _stats[key].append(now)
+    # เก็บเฉพาะ 1 ชม.ล่าสุด
+    _stats[key] = [t for t in _stats[key] if now - t < 3600]
+
+def get_weather_stats() -> dict:
+    """สถิติ 1 ชม.ล่าสุด — ใช้โชว์ใน /health"""
+    now = _t.time()
+    return {k: len([t for t in v if now - t < 3600]) for k, v in _stats.items()}
+
 
 @dataclass
 class RainForecast:
@@ -44,8 +59,12 @@ async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast
         "apikey": TOMORROW_API_KEY,
     }
     try:
+        _mark("tio_calls")
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get("https://api.tomorrow.io/v4/timelines", params=params)
+            if resp.status_code == 429:
+                _mark("quota_429")
+                logger.warning("⚠️ Tomorrow.io QUOTA EXCEEDED (429) — จะ fallback ไป TMD")
             resp.raise_for_status()
             intervals = (resp.json().get("data", {})
                          .get("timelines", [{}])[0]
@@ -82,6 +101,7 @@ async def get_tomorrow_forecast(lat: float, lon: float) -> Optional[RainForecast
                             f"Tomorrow.io — {max_mm:.1f} mm/hr", emoji,
                             rain_duration_min=rain_duration)
     except Exception as e:
+        _mark("tio_fails")
         logger.error(f"Tomorrow.io error: {e}")
         return None
 
@@ -133,11 +153,22 @@ async def get_rain_forecast(lat: float, lon: float) -> RainForecast:
     hit = _forecast_cache.get(key)
     if hit and _time.time() - hit[0] < _CACHE_TTL:
         return hit[1]
-    fc = (await get_tomorrow_forecast(lat, lon)
-          or await get_tmd_forecast(lat, lon))
+
+    fc = await get_tomorrow_forecast(lat, lon)
+    if fc is None:
+        _mark("tmd_fallbacks")
+        n = get_weather_stats()["tmd_fallbacks"]
+        logger.warning(f"⚠️ Fallback → TMD ({n} ครั้งใน 1 ชม.) — ความละเอียดพยากรณ์ลดลง")
+        fc = await get_tmd_forecast(lat, lon)
     if fc is None:
         return _no_rain("none")  # ไม่ cache — ให้ลองใหม่รอบหน้า
-    _forecast_cache[key] = (_time.time(), fc)
+
+    # ใส่ cache + ล้าง entry หมดอายุ กัน dict โตไม่จำกัด (กินแรม)
+    now = _time.time()
+    if len(_forecast_cache) > 200:
+        for k in [k for k, v in _forecast_cache.items() if now - v[0] >= _CACHE_TTL]:
+            del _forecast_cache[k]
+    _forecast_cache[key] = (now, fc)
     return fc
 
 
