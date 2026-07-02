@@ -1,7 +1,7 @@
 """
 scheduler.py — Rain Alert Bot
 Auto-push แจ้งเตือนฝนล่วงหน้า 1 ชั่วโมง
-- ทุก 10 นาที ตรวจ Tomorrow.io สำหรับผู้ใช้ทุกคนที่มีตำแหน่ง
+- ทุก 5 นาที ตรวจ Tomorrow.io สำหรับผู้ใช้ทุกคนที่มีตำแหน่ง
 - ส่ง push เฉพาะเมื่อจะมีฝนจริง และพ้น cooldown แล้ว และในช่วงเวลาที่อนุญาต
 """
 
@@ -91,13 +91,13 @@ def start_scheduler():
     scheduler.add_job(
         auto_rain_alert,
         trigger="interval",
-        minutes=10,
+        minutes=5,
         id="auto_rain_alert",
         replace_existing=True,
         max_instances=1,
     )
     scheduler.start()
-    logger.info("✅ Scheduler started — auto rain alert every 10 min")
+    logger.info("✅ Scheduler started — auto rain alert every 5 min")
 
 
 def stop_scheduler():

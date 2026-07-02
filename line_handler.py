@@ -109,7 +109,7 @@ async def _on_location(event: MessageEvent):
     rec = build_recommendation(forecast)
     await _reply(event.reply_token, [FlexMessage(
         alt_text=f"{forecast.emoji} {forecast.intensity_th}",
-        contents=_rain_flex(forecast, rec),
+        contents=_rain_flex(forecast, rec, label),
     )])
 
 
@@ -186,7 +186,7 @@ async def _reply_rain_now(reply_token: str, uid: str):
     rec = build_recommendation(forecast)
     await _reply(reply_token, [FlexMessage(
         alt_text=f"{forecast.emoji} {forecast.intensity_th}",
-        contents=_rain_flex(forecast, rec),
+        contents=_rain_flex(forecast, rec, loc.label),
     )])
 
 
@@ -285,16 +285,11 @@ async def _on_postback(event: PostbackEvent):
 async def push_rain_alert(uid: str, forecast, loc_label: str = "ตำแหน่งของคุณ", alert_log_id: int = None):
     """Push แจ้งเตือนฝนล่วงหน้า 1 ชม. — เรียกจาก scheduler"""
     rec = build_recommendation(forecast)
-    mins = forecast.minutes_to_rain
-    mins_text = (
-        "ตกอยู่เลย ☔" if mins == 0
-        else f"อีก {mins} นาทีมาแล้ว" if mins is not None
-        else "ซักพักนึง"
-    )
-    alt = f"⚠️ {forecast.emoji} ฝนจะมา{mins_text} — {loc_label}"
+    mins_text, dur_text = _rain_timing_texts(forecast)
+    alt = f"⚠️ {forecast.emoji} ฝนจะตก{mins_text} — {loc_label}"
     flex_msg = FlexMessage(
         alt_text=alt,
-        contents=_push_alert_flex(forecast, rec, loc_label, mins_text, alert_log_id),
+        contents=_push_alert_flex(forecast, rec, loc_label, mins_text, alert_log_id, dur_text),
         quick_reply=_location_quick_reply(),   # ← ปุ่มอัพเดทตำแหน่งใต้ alert
     )
     async with AsyncApiClient(configuration) as api_client:
@@ -303,7 +298,7 @@ async def push_rain_alert(uid: str, forecast, loc_label: str = "ตำแหน�
         )
 
 
-def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str, alert_log_id: int = None) -> FlexContainer:
+def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str, alert_log_id: int = None, dur_text: str = None) -> FlexContainer:
     """Flex สำหรับ auto-push alert — แสดง badge 'แจ้งเตือนอัตโนมัติ'"""
     color = {"none": "#2E7D32", "light": "#1565C0",
              "moderate": "#E65100", "heavy": "#B71C1C",
@@ -329,11 +324,17 @@ def _push_alert_flex(forecast, rec: str, loc_label: str, mins_text: str, alert_l
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "ท้องฟ้าว่าไง?", "color": "#888888",
+                    {"type": "text", "text": "⏱ ฝนจะตก", "color": "#888888",
                      "size": "sm", "flex": 2},
                     {"type": "text", "text": mins_text,
-                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
                 ]},
+                *([{"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "⏳ ตกนาน", "color": "#888888",
+                     "size": "sm", "flex": 2},
+                    {"type": "text", "text": dur_text,
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
+                ]}] if dur_text else []),
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {rec}", "wrap": True,
                  "color": "#333333", "size": "sm", "margin": "md"},
@@ -479,16 +480,35 @@ def _no_location_flex() -> FlexContainer:
     })
 
 
-def _rain_flex(forecast, rec: str) -> FlexContainer:
+def _rain_timing_texts(forecast):
+    """คืน (mins_text, dur_text) — 'ฝนจะตกในอีก X นาที (~HH:MM)' และ 'ตกนาน ~X นาที (หยุด ~HH:MM)'"""
+    now = datetime.now(_THAI_TZ)
+    mins = forecast.minutes_to_rain
+    if not forecast.will_rain:
+        mins_text = "ไม่มีฝนใน 1 ชม. ☀️"
+    elif mins == 0 or mins is None:
+        mins_text = "ตกอยู่เลยนะ ระวังด้วย ☔" if forecast.source == "tomorrow_io" else "อีกซักครู่นึง (1-2 ชม.)"
+    else:
+        start = (now + timedelta(minutes=mins)).strftime("%H:%M")
+        mins_text = f"อีก {mins} นาที (~{start} น.)"
+
+    dur_text = None
+    if forecast.will_rain:
+        dur = getattr(forecast, "rain_duration_min", None)
+        if dur:
+            end = (now + timedelta(minutes=(mins or 0) + dur)).strftime("%H:%M")
+            dur_text = f"~{dur} นาที (หยุด ~{end} น.)"
+        elif forecast.source == "tomorrow_io":
+            dur_text = "ต่อเนื่องเกิน 1 ชม. ☔"
+    return mins_text, dur_text
+
+
+def _rain_flex(forecast, rec: str, loc_label: str = None) -> FlexContainer:
     color = {"none": "#2E7D32", "light": "#1565C0",
              "moderate": "#E65100", "heavy": "#B71C1C",
              "violent": "#6A1B9A"}.get(forecast.intensity, "#1565C0")
 
-    mins_text = (
-        "ตกอยู่เลยนะ ระวังด้วย ☔" if forecast.minutes_to_rain == 0
-        else f"อีก {forecast.minutes_to_rain} นาทีนะ เตรียมตัวหน่อยก็ดี" if forecast.minutes_to_rain is not None
-        else "อีกซักครู่นึง"
-    )
+    mins_text, dur_text = _rain_timing_texts(forecast)
     now_str = datetime.now(_THAI_TZ).strftime("%d/%m %H:%M น.")
 
     liff_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{RENDER_URL}/liff"
@@ -501,18 +521,24 @@ def _rain_flex(forecast, rec: str) -> FlexContainer:
             "contents": [
                 {"type": "text", "text": f"{forecast.emoji} {forecast.intensity_th}",
                  "color": "#FFFFFF", "weight": "bold", "size": "xxl"},
-                {"type": "text", "text": now_str,
-                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm"},
+                {"type": "text",
+                 "text": (f"📍 {loc_label}  •  {now_str}" if loc_label else now_str),
+                 "color": "#FFFFFFCC", "size": "xs", "margin": "sm", "wrap": True},
             ],
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
                 {"type": "box", "layout": "horizontal", "contents": [
-                    {"type": "text", "text": "ท้องฟ้าว่าไง?", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": "⏱ ฝนจะตก", "color": "#888888", "size": "sm", "flex": 2},
                     {"type": "text", "text": mins_text,
-                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3},
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
                 ]},
+                *([{"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "⏳ ตกนาน", "color": "#888888", "size": "sm", "flex": 2},
+                    {"type": "text", "text": dur_text,
+                     "color": "#111111", "size": "sm", "weight": "bold", "flex": 3, "wrap": True},
+                ]}] if dur_text else []),
                 {"type": "separator", "margin": "md"},
                 {"type": "text", "text": f"💡 {rec}", "wrap": True,
                  "color": "#333333", "size": "sm", "margin": "md"},
