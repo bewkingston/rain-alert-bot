@@ -3,6 +3,8 @@ scheduler.py — Rain Alert Bot
 Auto-push แจ้งเตือนฝนล่วงหน้า 1 ชั่วโมง
 - ทุก 5 นาที ตรวจ Tomorrow.io สำหรับผู้ใช้ทุกคนที่มีตำแหน่ง
 - ส่ง push เฉพาะเมื่อจะมีฝนจริง และพ้น cooldown แล้ว และในช่วงเวลาที่อนุญาต
+
++ สรุปอากาศเช้า — ทุกวัน 07:00 น. ส่งให้ทุก user ที่ active โดยไม่เช็คว่าฝนจะตกหรือไม่
 """
 
 import logging
@@ -115,6 +117,42 @@ async def auto_rain_alert():
         db.close()
 
 
+async def daily_weather_summary():
+    """สรุปสภาพอากาศตอน 07:00 น. — ส่งให้ทุก user ที่ active ทุกวัน ไม่ว่าฝนจะตกหรือไม่"""
+    from database import SessionLocal, User, UserLocation
+    from weather import get_rain_forecast
+    from line_handler import push_daily_weather
+
+    db = SessionLocal()
+    try:
+        users = (db.query(User)
+                 .filter(User.is_active == True, User.alert_enabled == True)
+                 .all())
+
+        for user in users:
+            loc = (db.query(UserLocation)
+                   .filter(UserLocation.line_user_id == user.line_user_id,
+                           UserLocation.is_primary == True)
+                   .first())
+            if not loc:
+                continue
+
+            try:
+                forecast = await get_rain_forecast(loc.latitude, loc.longitude)
+                if not forecast:
+                    logger.warning(f"Skip daily weather for {user.line_user_id}: no forecast")
+                    continue
+                await push_daily_weather(user.line_user_id, forecast, loc.label)
+                logger.info(f"✅ Daily weather sent → {user.line_user_id}: {forecast.intensity_th}")
+            except Exception as e:
+                logger.error(f"Daily weather push failed for {user.line_user_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"daily_weather_summary error: {e}")
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if scheduler.running:
         return
@@ -126,8 +164,17 @@ def start_scheduler():
         replace_existing=True,
         max_instances=1,
     )
+    scheduler.add_job(
+        daily_weather_summary,
+        trigger="cron",
+        hour=7,
+        minute=0,
+        id="daily_weather_summary",
+        replace_existing=True,
+        max_instances=1,
+    )
     scheduler.start()
-    logger.info("✅ Scheduler started — auto rain alert every 5 min")
+    logger.info("✅ Scheduler started — auto rain alert every 5 min + daily weather summary at 07:00")
 
 
 def stop_scheduler():
