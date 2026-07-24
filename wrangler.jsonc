@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rain-alert-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-16",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rain-alert-db",
+      "database_id": "3666b066-86d8-4605-9088-3d367c391d24"
+    }
+  ],
+  "triggers": {
+    // ตรวจฝนทุก 5 นาที + สรุปอากาศเช้า 07:00 ไทย (= 00:00 UTC)
+    "crons": ["*/5 * * * *", "0 0 * * *"]
+  },
+  "routes": [
+    { "pattern": "go.forsi.co", "custom_domain": true }
+  ],
+  "workers_dev": true
+}

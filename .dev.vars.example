@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local `wrangler dev` — never commit the real file.
+LINE_CHANNEL_SECRET=dummy_secret_for_local_dev
+LINE_CHANNEL_ACCESS_TOKEN=dummy_token_for_local_dev
+# Optional — เว้นว่างได้ บอทจะใช้ Open-Meteo (ฟรี ไม่ต้องมี key) เป็นแหล่งข้อมูลฝน
+TOMORROW_IO_API_KEY=
+TMD_API_KEY=
