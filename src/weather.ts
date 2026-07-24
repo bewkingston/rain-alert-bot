@@ -282,7 +282,9 @@ export async function getTmdForecast(
     lat: String(lat),
     lon: String(lon),
     fields: "rain,rh,tc",
-    dur: "3",
+    // เอกสาร TMD ใช้ชื่อพารามิเตอร์เต็ม "duration" ไม่ใช่ "dur" — ของเดิมส่งผิดชื่อ
+    // ทำให้ TMD เมินพารามิเตอร์นี้ไปเงียบ ๆ แล้ว fallback เป็น default 1 ชม.
+    duration: "3",
   });
 
   try {
