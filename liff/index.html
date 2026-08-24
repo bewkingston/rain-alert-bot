@@ -759,7 +759,10 @@ function centerMapToMyLocation() {
 
 function confirmMapLocation() {
   if (mapSelectedAddr && mapTargetField) {
-    document.getElementById(mapTargetField).value = mapSelectedAddr;
+    const el = document.getElementById(mapTargetField);
+    el.value = mapSelectedAddr;
+    el.dataset.lat = mapSelectedLat;
+    el.dataset.lon = mapSelectedLon;
   }
   closeMapModal();
 }
