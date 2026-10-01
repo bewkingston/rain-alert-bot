@@ -22,9 +22,10 @@ const TOMORROW_URL = "https://api.tomorrow.io/v4/timelines";
 const TMD_FORECAST_URL = "https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly/at";
 
 // เกณฑ์ขั้นต่ำที่ถือว่า "ฝนตกจริง" (mm/hr) — ต้องตรงกับขอบเขต "none" ใน
-// classifyIntensity (< 0.1 = ไม่มีฝน) ไม่งั้นฝนเล็กน้อยจริง (0.1–0.49 mm/hr)
-// จะถูกจัดเป็น willRain=false อยู่ดี ทำให้พลาดแจ้งเตือน (false negative)
-const RAIN_THRESHOLD_MM = 0.1;
+// classifyIntensity ไม่งั้นค่าที่อยู่ระหว่างสองเกณฑ์จะจัดกลุ่มไม่ตรงกัน
+// (เดิม 0.1 mm/hr จับฝนปรอย/noise ระดับต่ำมากด้วย ทำให้แจ้งเตือนถี่เกินไป
+// และเป็น false alarm บ่อย — ยกเป็น 0.5 mm/hr ให้เหลือเฉพาะฝนที่รู้สึกได้จริง)
+const RAIN_THRESHOLD_MM = 0.5;
 
 // ─────────────────────────────────────────────
 //  Rain-window detection (the fix)
@@ -527,7 +528,7 @@ function noRainForecast(source: RainForecast["source"]): RainForecast {
 export function classifyIntensity(
   mmPerHr: number
 ): [RainForecast["intensity"], string, string] {
-  if (mmPerHr < 0.1) return ["none", "ไม่มีฝน", "☀️"];
+  if (mmPerHr < 0.5) return ["none", "ไม่มีฝน", "☀️"];
   if (mmPerHr < 2.5) return ["light", "ฝนเล็กน้อย", "🌦️"];
   if (mmPerHr < 10.0) return ["moderate", "ฝนปานกลาง", "🌧️"];
   if (mmPerHr < 50.0) return ["heavy", "ฝนหนัก", "⛈️"];

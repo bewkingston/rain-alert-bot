@@ -32,15 +32,18 @@ describe("detectRainWindow — regression tests for the jitter bug", () => {
     expect(r.maxIntensity).toBe(3.0);
   });
 
-  it("jittery light rain around the 0.1mm/hr threshold — must detect (was the bug)", () => {
+  it("jittery light rain around the 0.5mm/hr threshold — must detect (was the bug)", () => {
     const jitterBlock = [0.6, 0.3, 0.6, 0.4, 0.6, 0.3, 0.7, 0.4, 0.6, 0.3];
     const vals = [...Array(10).fill(0.0), ...jitterBlock, ...jitterBlock, ...jitterBlock, ...Array(10).fill(0.0)];
     const r = detectRainWindow(vals);
     expect(r.willRain).toBe(true);
-    // Look-ahead window flags the dry→wet transition 1 minute early (see the
-    // "solid sustained moderate rain" test above) — every value in jitterBlock
-    // clears the 0.1mm/hr threshold, so it's caught at minute 9, not 10.
-    expect(r.startMinute).toBe(9);
+    // With the old 0.1mm/hr threshold the low jitter values (0.3/0.4) also
+    // cleared it, so the look-ahead window caught the transition 1 minute
+    // early (at minute 9: [dry, 0.6, 0.3] was 2-of-3 wet). At 0.5mm/hr those
+    // lows no longer count, so detection lands on time at minute 10
+    // ([0.6, 0.3, 0.6] — the two 0.6s are 2-of-3) instead of early — still
+    // never late, which is what matters for a "rain is coming" alert.
+    expect(r.startMinute).toBe(10);
   });
 
   it("alternating rain, never 2-in-a-row — must still detect (was the bug)", () => {
@@ -48,8 +51,9 @@ describe("detectRainWindow — regression tests for the jitter bug", () => {
     const vals = [...Array(10).fill(0.0), ...altBlock, ...altBlock, ...altBlock, ...Array(10).fill(0.0)];
     const r = detectRainWindow(vals);
     expect(r.willRain).toBe(true);
-    // Same 1-minute-early look-ahead as above.
-    expect(r.startMinute).toBe(9);
+    // Same threshold-driven shift as above: 0.2 no longer clears 0.5mm/hr,
+    // so detection is on time at minute 10, not early at minute 9.
+    expect(r.startMinute).toBe(10);
   });
 
   it("single-minute noise blip is still correctly ignored", () => {
@@ -116,12 +120,12 @@ describe("minutely15ToPerMinute (Open-Meteo)", () => {
     expect(vals[0]).toBe(2.4); // มาจาก step 1 (0.6*4) ไม่ใช่ step 0
   });
 
-  it("feeds detectRainWindow correctly: threshold matches classifyIntensity's none/light boundary (0.1mm/hr)", () => {
-    // 0.025mm/15min = 0.1mm/hr — ตรงขอบ "light" ใน classifyIntensity → ควรตรวจเจอ
-    const rain = minutely15ToPerMinute([step(0, 0.025), step(1, 0.025), step(2, 0.025), step(3, 0.025), step(4, 0.025)], T0);
+  it("feeds detectRainWindow correctly: threshold matches classifyIntensity's none/light boundary (0.5mm/hr)", () => {
+    // 0.125mm/15min = 0.5mm/hr — ตรงขอบ "light" ใน classifyIntensity → ควรตรวจเจอ
+    const rain = minutely15ToPerMinute([step(0, 0.125), step(1, 0.125), step(2, 0.125), step(3, 0.125), step(4, 0.125)], T0);
     expect(detectRainWindow(rain).willRain).toBe(true);
-    // 0.01mm/15min = 0.04mm/hr — ต่ำกว่า 0.1 → ไม่เจอ
-    const drizzle = minutely15ToPerMinute([step(0, 0.01), step(1, 0.01), step(2, 0.01), step(3, 0.01), step(4, 0.01)], T0);
+    // 0.1mm/15min = 0.4mm/hr — ต่ำกว่า 0.5 (ฝนปรอย/noise) → ไม่เจอ
+    const drizzle = minutely15ToPerMinute([step(0, 0.1), step(1, 0.1), step(2, 0.1), step(3, 0.1), step(4, 0.1)], T0);
     expect(detectRainWindow(drizzle).willRain).toBe(false);
   });
 });
@@ -133,6 +137,12 @@ describe("classifyIntensity", () => {
     expect(classifyIntensity(5.0)[0]).toBe("moderate");
     expect(classifyIntensity(20.0)[0]).toBe("heavy");
     expect(classifyIntensity(100.0)[0]).toBe("violent");
+  });
+
+  it("treats trace/drizzle amounts below 0.5mm/hr as none, matching RAIN_THRESHOLD_MM", () => {
+    expect(classifyIntensity(0.3)[0]).toBe("none");
+    expect(classifyIntensity(0.49)[0]).toBe("none");
+    expect(classifyIntensity(0.5)[0]).toBe("light");
   });
 });
 

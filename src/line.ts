@@ -19,6 +19,7 @@ import {
   setAlertHours,
   recordAlertFeedback,
   insertFeedback,
+  insertApiError,
 } from "./db";
 import {
   getRainForecast,
@@ -109,7 +110,12 @@ export async function getAccessToken(env: Env, forceRefresh = false): Promise<st
 //  Messaging API (reply / push)
 // ─────────────────────────────────────────────
 
-async function callLineApi(path: "reply" | "push", body: unknown, env: Env): Promise<void> {
+async function callLineApi(
+  path: "reply" | "push",
+  body: unknown,
+  env: Env,
+  lineUserId?: string
+): Promise<void> {
   let token = await getAccessToken(env);
   let resp = await fetch(`https://api.line.me/v2/bot/message/${path}`, {
     method: "POST",
@@ -134,7 +140,16 @@ async function callLineApi(path: "reply" | "push", body: unknown, env: Env): Pro
   }
 
   if (!resp.ok) {
-    console.error(`LINE API error (${path}): ${resp.status} ${await resp.text()}`);
+    const detail = await resp.text();
+    console.error(`LINE API error (${path}): ${resp.status} ${detail}`);
+    // เดิม error แบบนี้ (เช่น 429 quota exceeded ตอน push) หายไปเงียบ ๆ ใน console.error
+    // เท่านั้น ไม่มีที่ให้เช็คย้อนหลังเลย — บันทึกลง D1 ด้วยเพื่อให้ /api/errors เห็นได้
+    await insertApiError(env.DB, {
+      endpoint: `line_${path}`,
+      lineUserId: lineUserId ?? null,
+      statusCode: resp.status,
+      detail: detail.slice(0, 500),
+    }).catch((e) => console.error(`Failed to log api_error: ${e}`));
   }
 }
 
@@ -147,21 +162,24 @@ function textMessage(text: string) {
   return { type: "text", text };
 }
 
-function flexMessage(altText: string, contents: unknown, withLocationQuickReply = false) {
-  return {
-    type: "flex",
-    altText,
-    contents,
-    ...(withLocationQuickReply ? { quickReply: LOCATION_QUICK_REPLY } : {}),
-  };
+function flexMessage(altText: string, contents: unknown) {
+  return { type: "flex", altText, contents };
+}
+
+/** แปะ quick reply 'อัพเดทตำแหน่ง' ไว้ท้ายข้อความสุดท้ายเสมอ — LINE แสดงแค่อันเดียวต่อการ reply/push อยู่แล้ว */
+function attachLocationQuickReply(messages: unknown[]): unknown[] {
+  if (messages.length === 0) return messages;
+  const last = messages[messages.length - 1] as Record<string, unknown>;
+  if (last.quickReply) return messages;
+  return [...messages.slice(0, -1), { ...last, quickReply: LOCATION_QUICK_REPLY }];
 }
 
 async function reply(replyToken: string, messages: unknown[], env: Env) {
-  await callLineApi("reply", { replyToken, messages }, env);
+  await callLineApi("reply", { replyToken, messages: attachLocationQuickReply(messages) }, env);
 }
 
 async function push(to: string, messages: unknown[], env: Env) {
-  await callLineApi("push", { to, messages }, env);
+  await callLineApi("push", { to, messages: attachLocationQuickReply(messages) }, env, to);
 }
 
 // ─────────────────────────────────────────────
@@ -326,7 +344,7 @@ export function buildRainFlex(forecast: RainForecast, recommend: string, locatio
           style: "secondary",
           height: "sm",
           flex: 1,
-          action: { type: "message", label: "⏰ ตั้งเวลาแจ้งเตือน", text: "แจ้งเตือน" },
+          action: { type: "message", label: "📍 อัพเดท location", text: "อัพเดทตำแหน่ง" },
         },
       ],
     },
@@ -419,61 +437,6 @@ export function buildPushAlertFlex(
   };
 }
 
-/** Flex สรุปอากาศเช้า 07:00 น. — ส่งทุกวันไม่ว่าฝนจะตกหรือไม่ */
-export function buildDailyWeatherFlex(forecast: RainForecast, recommend: string, locLabel: string) {
-  const color = COLOR_MAP[forecast.intensity] ?? "#2E7D32";
-  const nowStr = formatDateTimeTh(new Date());
-  const [minsText, durText] = rainTimingTexts(forecast);
-
-  return {
-    type: "bubble",
-    size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: color,
-      paddingAll: "20px",
-      contents: [
-        { type: "text", text: "🌅 สรุปอากาศเช้านี้", color: "#FFFFFF99", size: "xs", weight: "bold" },
-        { type: "text", text: `${forecast.emoji} ${forecast.intensityTh}`, color: "#FFFFFF", weight: "bold", size: "xxl", margin: "sm" },
-        { type: "text", text: `📍 ${locLabel}  •  ${nowStr}`, color: "#FFFFFFCC", size: "xs", margin: "sm" },
-      ],
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      contents: [
-        infoRow("⏱ สถานะฝน", minsText),
-        ...(durText ? [infoRow("⏳ ตกนาน", durText)] : []),
-        { type: "separator", margin: "md" },
-        { type: "text", text: `💡 ${recommend}`, wrap: true, color: "#333333", size: "sm", margin: "md" },
-      ],
-    },
-    footer: {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      contents: [
-        {
-          type: "button",
-          style: "secondary",
-          height: "sm",
-          flex: 1,
-          action: { type: "message", label: "👀 ขอเช็กอีกรอบ", text: "ฝน" },
-        },
-        {
-          type: "button",
-          style: "secondary",
-          height: "sm",
-          flex: 1,
-          action: { type: "message", label: "⏰ ตั้งเวลาแจ้งเตือน", text: "แจ้งเตือน" },
-        },
-      ],
-    },
-  };
-}
-
 export function buildWelcomeFlex() {
   return {
     type: "bubble",
@@ -519,7 +482,7 @@ export function buildWelcomeFlex() {
           type: "button",
           style: "secondary",
           height: "sm",
-          action: { type: "message", label: "⏰ ตั้งเวลาแจ้งเตือน", text: "แจ้งเตือน" },
+          action: { type: "message", label: "📍 อัพเดท location", text: "อัพเดทตำแหน่ง" },
         },
       ],
     },
@@ -726,7 +689,7 @@ export async function handleLineEvent(event: LineEvent, env: Env): Promise<void>
         if (event.replyToken) {
           await reply(
             event.replyToken,
-            [flexMessage("ยินดีต้อนรับสู่ Rain Alert 🌧️", buildWelcomeFlex(), true)], env);
+            [flexMessage("ยินดีต้อนรับสู่ Rain Alert 🌧️", buildWelcomeFlex())], env);
         }
         return;
 
@@ -788,6 +751,7 @@ const RAIN_KEYWORDS = ["ฝน", "ฝนตกไหม", "ฝนไหม", "�
 const ON_KEYWORDS = ["เปิด", "เปิดแจ้งเตือน", "on"];
 const OFF_KEYWORDS = ["ปิด", "ปิดแจ้งเตือน", "off"];
 const ALERT_TIME_KEYWORDS = ["แจ้งเตือน", "เวลาแจ้ง", "ตั้งเวลา"];
+const UPDATE_LOCATION_KEYWORDS = ["อัพเดทตำแหน่ง", "อัปเดทตำแหน่ง", "update location"];
 const FEEDBACK_PREFIXES = ["ติชม", "ฟีดแบค", "feedback", "แนะนำ"];
 const TIME_CHECK_KEYWORDS = ["ออก", "ไป", "กลับ", "เดินทาง", "เช้า", "เย็น", "ถึง"];
 
@@ -813,6 +777,15 @@ async function handleTextMessage(event: LineEvent, uid: string, env: Env): Promi
   if (OFF_KEYWORDS.includes(tl)) {
     await setAlertEnabled(env.DB, uid, false);
     await reply(replyToken, [textMessage("🔕 ปิดการแจ้งเตือนแล้วครับ\nพิมพ์ 'เปิด' เมื่อต้องการเปิดอีกครั้ง")], env);
+    return;
+  }
+
+  // ── อัพเดท location (ปุ่ม 📍 อัพเดท location ใน flex) ──
+  if (UPDATE_LOCATION_KEYWORDS.includes(tl)) {
+    await reply(
+      replyToken,
+      [{ type: "text", text: "📍 กดปุ่มด้านล่างเพื่อส่ง location ใหม่ได้เลยครับ", quickReply: LOCATION_QUICK_REPLY }],
+      env);
     return;
   }
 
@@ -861,7 +834,7 @@ async function handleTextMessage(event: LineEvent, uid: string, env: Env): Promi
   }
 
   // ── ทุกอย่างอื่น → help ───────────────────────
-  await reply(replyToken, [flexMessage("วิธีใช้ Rain Alert 🌧️", buildHelpFlex(), true)], env);
+  await reply(replyToken, [flexMessage("วิธีใช้ Rain Alert 🌧️", buildHelpFlex())], env);
 }
 
 async function handleFeedbackText(
@@ -895,14 +868,14 @@ async function replyCurrentRain(replyToken: string, uid: string, env: Env): Prom
   if (!loc) {
     await reply(
       replyToken,
-      [flexMessage("ส่ง location ก่อนนะครับ", buildNoLocationFlex(), true)], env);
+      [flexMessage("ส่ง location ก่อนนะครับ", buildNoLocationFlex())], env);
     return;
   }
   const forecast = await getRainForecast(loc.latitude, loc.longitude, weatherKeys(env));
   const recommend = buildAlertRecommendation(forecast);
   await reply(
     replyToken,
-    [flexMessage(`${forecast.emoji} ${forecast.intensityTh}`, buildRainFlex(forecast, recommend, loc.label), true)], env);
+    [flexMessage(`${forecast.emoji} ${forecast.intensityTh}`, buildRainFlex(forecast, recommend, loc.label))], env);
 }
 
 async function replyRainAtTime(
@@ -917,7 +890,7 @@ async function replyRainAtTime(
   const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 
   if (!loc) {
-    await reply(replyToken, [flexMessage("ส่ง location ก่อนนะครับ", buildNoLocationFlex(), true)], env);
+    await reply(replyToken, [flexMessage("ส่ง location ก่อนนะครับ", buildNoLocationFlex())], env);
     return;
   }
 
@@ -943,7 +916,7 @@ async function replyRainAtTime(
 
   await reply(
     replyToken,
-    [flexMessage(`${forecast.emoji} เวลา ${timeStr} น. — ${forecast.intensityTh}`, buildTimeRainFlex(forecast, timeStr, timeLabel), true)],
+    [flexMessage(`${forecast.emoji} เวลา ${timeStr} น. — ${forecast.intensityTh}`, buildTimeRainFlex(forecast, timeStr, timeLabel))],
     env
   );
 }
@@ -986,16 +959,13 @@ export async function pushRainAlertMessage(
 ): Promise<void> {
   const recommend = buildAlertRecommendation(forecast);
   const [minsText, durText] = rainTimingTexts(forecast);
-  const alt = `⚠️ ${forecast.emoji} ฝนจะตก${minsText} — ${locLabel}`;
+  // minsText ตอนฝนตกอยู่แล้วคือ "ตกอยู่เลยนะ..." — ห้ามต่อท้าย "ฝนจะตก" (จะกลายเป็น "ฝนจะตกตกอยู่เลยนะ")
+  const rainingNow = minsText.startsWith("ตกอยู่");
+  const alt = rainingNow
+    ? `⚠️ ${forecast.emoji} ฝน${minsText} — ${locLabel}`
+    : `⚠️ ${forecast.emoji} ฝนจะตก${minsText} — ${locLabel}`;
   await push(
     uid,
-    [flexMessage(alt, buildPushAlertFlex(forecast, recommend, locLabel, minsText, alertLogId, durText), true)], env);
+    [flexMessage(alt, buildPushAlertFlex(forecast, recommend, locLabel, minsText, alertLogId, durText))], env);
 }
 
-export async function pushDailyWeather(env: Env, uid: string, forecast: RainForecast, locLabel: string): Promise<void> {
-  const recommend = buildAlertRecommendation(forecast);
-  const alt = `🌅 สรุปอากาศเช้านี้ ${forecast.emoji} ${forecast.intensityTh} — ${locLabel}`;
-  await push(
-    uid,
-    [flexMessage(alt, buildDailyWeatherFlex(forecast, recommend, locLabel), true)], env);
-}

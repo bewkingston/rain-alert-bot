@@ -3,6 +3,9 @@
   "name": "rain-alert-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-16",
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": true }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -11,11 +14,13 @@
     }
   ],
   "triggers": {
-    // ตรวจฝนทุก 5 นาที + สรุปอากาศเช้า 07:00 ไทย (= 00:00 UTC)
-    "crons": ["*/5 * * * *", "0 0 * * *"]
+    // ตรวจฝนทุก 5 นาที — ส่ง push เฉพาะตอนฝนจะตกจริงเท่านั้น
+    // (สรุปอากาศเช้า 07:00 ทุกวันถูกถอดออก 2026-07-29 — กิน quota push ฟรีทุกวันโดยไม่จำเป็น)
+    "crons": ["*/5 * * * *"]
   },
   "routes": [
-    { "pattern": "go.forsi.co", "custom_domain": true }
+    { "pattern": "go.forsi.co", "custom_domain": true },
+    { "pattern": "forsi.co", "custom_domain": true }
   ],
   "workers_dev": true
 }

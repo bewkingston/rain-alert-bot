@@ -9,4 +9,7 @@ export interface Env {
   TMD_API_KEY: string;
   /** ตั้งไว้ถ้าอยากให้ forward ข้อความ 'ติชม ...' เข้า LINE ส่วนตัว (optional) */
   ADMIN_LINE_USER_ID?: string;
+  /** Rain Route (LIFF) — Google Maps Directions/Places/Geocoding + LIFF app id */
+  GOOGLE_MAPS_API_KEY?: string;
+  LIFF_ID?: string;
 }

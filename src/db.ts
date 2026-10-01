@@ -39,6 +39,13 @@ export interface LastAlert {
   minutesAgo: number;
 }
 
+// ใช้เป็นทั้ง "ค่า cooldown เริ่มต้น" และหน้าต่างเวลาที่ถือว่าเป็น "ฝนรอบเดียวกัน"
+// ใน autoRainAlert (src/index.ts) — เดิม INSERT ฝัง 5 นาทีตรงๆ ทั้งที่ schema
+// (migrations/0001_init.sql) กำหนด default ไว้ที่ 30 อยู่แล้ว ทำให้ค่านี้ไม่เคย
+// มีผลจริง (เทียบกับหน้าต่าง 180 นาทีที่เคยฮาร์ดโค้ดไว้แยกต่างหาก) — ยกเป็น 360
+// นาที (6 ชม.) ให้ฝนตกๆ หยุดๆ ในวันเดียวกันไม่ถูกนับเป็นคนละรอบถี่เกินไป
+export const DEFAULT_ALERT_COOLDOWN_MIN = 360;
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -82,16 +89,16 @@ export async function getOrCreateUser(
     await db
       .prepare(
         `INSERT INTO users (line_user_id, display_name, is_active, alert_enabled, alert_cooldown, alert_start_hour, alert_end_hour, created_at, updated_at)
-         VALUES (?, ?, 1, 1, 5, 6, 22, ?, ?)`
+         VALUES (?, ?, 1, 1, ?, 6, 22, ?, ?)`
       )
-      .bind(lineUserId, displayName ?? null, ts, ts)
+      .bind(lineUserId, displayName ?? null, DEFAULT_ALERT_COOLDOWN_MIN, ts, ts)
       .run();
     return {
       lineUserId,
       displayName: displayName ?? null,
       isActive: true,
       alertEnabled: true,
-      alertCooldown: 5,
+      alertCooldown: DEFAULT_ALERT_COOLDOWN_MIN,
       alertStartHour: 6,
       alertEndHour: 22,
     };
@@ -252,6 +259,46 @@ export async function insertFeedback(db: D1Database, lineUserId: string, message
     .prepare("INSERT INTO feedbacks (line_user_id, message, created_at) VALUES (?, ?, ?)")
     .bind(lineUserId, message, nowIso())
     .run();
+}
+
+export interface ApiError {
+  id: number;
+  occurredAt: string;
+  endpoint: string;
+  lineUserId: string | null;
+  statusCode: number | null;
+  detail: string | null;
+}
+
+/** บันทึก error จาก external API (เช่น LINE push/reply โดน 429 quota exceeded) ที่เดิมหายไปเงียบ ๆ ใน console.error */
+export async function insertApiError(
+  db: D1Database,
+  entry: { endpoint: string; lineUserId?: string | null; statusCode?: number | null; detail?: string | null }
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO api_errors (occurred_at, endpoint, line_user_id, status_code, detail)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .bind(nowIso(), entry.endpoint, entry.lineUserId ?? null, entry.statusCode ?? null, entry.detail ?? null)
+    .run();
+}
+
+/** error ล่าสุด (ทุก endpoint) เรียงใหม่สุดก่อน — ใช้แสดงใน /api/errors */
+export async function getRecentApiErrors(db: D1Database, limit: number = 50): Promise<ApiError[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM api_errors ORDER BY occurred_at DESC LIMIT ?")
+    .bind(limit)
+    .all();
+
+  return results.map((row: any) => ({
+    id: row.id,
+    occurredAt: row.occurred_at,
+    endpoint: row.endpoint,
+    lineUserId: row.line_user_id,
+    statusCode: row.status_code,
+    detail: row.detail,
+  }));
 }
 
 /**
